@@ -13,6 +13,8 @@
 # testing
 /coverage
 
+supabase
+
 # next.js
 /.next/
 /out/
