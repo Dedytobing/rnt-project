@@ -98,7 +98,7 @@ export default function InterviewPage() {
   const selectedCand = candidates.find(c => c.id === selectedId);
 
   return (
-    <div className="space-y-4">
+    <div className="interview-page space-y-4">
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
         <h1 className="text-xl font-bold text-slate-800">Sesi Wawancara (Interview Panel)</h1>
         <p className="text-xs text-slate-500">Catat hasil wawancara dan minat departemen kandidat. Penempatan akhir ditentukan Team RED.</p>
@@ -183,7 +183,7 @@ export default function InterviewPage() {
                   <h2 className="text-lg font-bold text-slate-800">{selectedCand.nama}</h2>
                   <p className="text-xs text-slate-500">Gender: {selectedCand.gender}</p>
                 </div>
-                <a href={selectedCand.link_cv} target="_blank" rel="noreferrer" className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 transition">
+                <a href={selectedCand.link_cv} target="_blank" rel="noreferrer" className="rnt-primary-action px-3 py-1.5 rounded-lg text-xs font-bold transition">
                   Buka Thread CV ↗
                 </a>
               </div>
@@ -200,7 +200,7 @@ export default function InterviewPage() {
                     type="button"
                     aria-pressed={form.deptPreference === 'LSSD'}
                     onClick={() => setForm({...form, deptPreference: form.deptPreference === 'LSSD' ? '' : 'LSSD'})}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
+                    className={`interview-department-card flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
                       form.deptPreference === 'LSSD'
                         ? 'bg-indigo-50/80 border-indigo-500 ring-2 ring-indigo-500/20 shadow-sm'
                         : 'bg-white border-slate-200 hover:bg-slate-50'
@@ -216,7 +216,7 @@ export default function InterviewPage() {
                     type="button"
                     aria-pressed={form.deptPreference === 'LSPD'}
                     onClick={() => setForm({...form, deptPreference: form.deptPreference === 'LSPD' ? '' : 'LSPD'})}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
+                    className={`interview-department-card flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
                       form.deptPreference === 'LSPD'
                         ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-sm'
                         : 'bg-white border-slate-200 hover:bg-slate-50'
@@ -275,7 +275,7 @@ export default function InterviewPage() {
               <button 
                 disabled={loading} 
                 type="submit" 
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm hover:bg-blue-700 disabled:bg-slate-300 transition shadow-md shadow-blue-500/20">
+                className="rnt-primary-action w-full py-3 rounded-lg font-bold text-sm transition shadow-md">
                 {loading ? 'Menyimpan...' : 'Simpan Hasil Wawancara'}
               </button>
             </form>

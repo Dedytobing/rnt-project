@@ -15,6 +15,14 @@ import Pagination, { PAGE_SIZE } from '../components/Pagination';
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
 const departmentLogos = { LSSD: '/logos/lssd.png', LSPD: '/logos/lspd.png' };
+function normalizeMdtStatus(value) {
+  const status = String(value || '').trim().toLowerCase();
+  if (status === 'green') return 'Green';
+  if (status === 'red' || status.includes('black') || status.includes('penalty') || status.includes('penalti')) return 'Red';
+  if (status === 'yellow' || status === 'orange') return 'Orange';
+  return status ? 'Orange' : '';
+}
+
 const recruitmentStages = [
   { id: 'new', label: 'Data Baru', color: '#3B82F6' },
   { id: 'pending', label: 'Pending', color: '#F59E0B' },
@@ -121,7 +129,7 @@ export default function InternalDashboard() {
         ? c.status_cv === 'Interview' && !c.status_interview
         : c.status_interview === filterInterview;
 
-    const matchMdt = filterMdt === 'ALL' ? true : (c.mdt_check === filterMdt);
+    const matchMdt = filterMdt === 'ALL' ? true : (normalizeMdtStatus(c.mdt_check) === filterMdt);
     const matchDept = filterDept === 'ALL' ? true : (c.mapping_dept === filterDept);
 
     return matchSearch && matchStatus && matchInterview && matchMdt && matchDept;
@@ -228,7 +236,7 @@ export default function InternalDashboard() {
             <Bar
               data={{
                 labels: ['LSSD', 'LSPD'],
-                datasets: [{ label: 'Kandidat', data: [countLssd, countLspd], backgroundColor: ['#4F46E5', '#2563EB'], borderRadius: 7, barThickness: 25, maxBarThickness: 30 }]
+                datasets: [{ label: 'Kandidat', data: [countLssd, countLspd], backgroundColor: ['#315842', '#7FA886'], borderRadius: 7, barThickness: 25, maxBarThickness: 30 }]
               }}
               options={{
                 indexAxis: 'y', responsive: true, maintainAspectRatio: false,
@@ -300,7 +308,7 @@ export default function InternalDashboard() {
               onChange={e => setFilterMdt(e.target.value)}>
               <option value="ALL">Semua MDT</option>
               <option value="Green">🟢 MDT Green</option>
-              <option value="Yellow">🟡 MDT Yellow</option>
+              <option value="Orange">🟠 MDT Orange</option>
               <option value="Red">🔴 MDT Red</option>
             </select>
 
@@ -338,6 +346,7 @@ export default function InternalDashboard() {
               ) : (
                 paginatedCandidates.map(c => {
                   const statusDisplay = !c.status_cv ? 'Antrean Baru' : c.status_cv === 'Interview' ? 'Lolos Review CV' : c.status_cv;
+                  const mdtStatus = normalizeMdtStatus(c.mdt_check);
                   const interviewStatusDisplay = c.status_cv !== 'Interview'
                     ? 'Belum masuk tahap interview'
                     : c.status_interview || 'Belum ada keputusan';
@@ -356,12 +365,9 @@ export default function InternalDashboard() {
                         </span>
                       </td>
                       <td className="p-3 font-semibold">
-                        {c.mdt_check ? (
-                          <span className={
-                            c.mdt_check === 'Green' ? 'text-emerald-700' :
-                            c.mdt_check === 'Yellow' ? 'text-amber-700' : 'text-rose-700'
-                          }>
-                            {c.mdt_check}
+                        {mdtStatus ? (
+                          <span className={`mdt-status-badge ${mdtStatus.toLowerCase()}`}>
+                            {mdtStatus}
                           </span>
                         ) : '-'}
                       </td>

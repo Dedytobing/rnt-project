@@ -4,6 +4,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
+const STAFF_PROFILE_STORAGE_KEY = 'rnt_internal_profiles_v1';
+
 export default function InternalLayout({ children }) {
   const pathname = usePathname();
   const [officerName, setOfficerName] = useState('');
@@ -15,6 +17,10 @@ export default function InternalLayout({ children }) {
   const [inputRole, setInputRole] = useState('STAFF');
   const [inputPin, setInputPin] = useState('');
   const [pinError, setPinError] = useState('');
+  const [savedProfiles, setSavedProfiles] = useState([]);
+  const [profileSelection, setProfileSelection] = useState('');
+  const [showSavedProfiles, setShowSavedProfiles] = useState(false);
+  const [rememberProfile, setRememberProfile] = useState(false);
   const [isAuth, setIsAuth] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const pageMeta = {
@@ -25,9 +31,39 @@ export default function InternalLayout({ children }) {
     '/internal/placement': ['Penempatan akhir', 'Keputusan departemen khusus Team RNT'],
   };
   const [pageTitle, pageSubtitle] = pageMeta[pathname] || ['Portal personel', 'Sistem manajemen rekrutmen RNT Project'];
+  const selectedSavedProfile = profileSelection !== '' ? savedProfiles[Number(profileSelection)] : null;
+  const usingSavedProfile = Boolean(selectedSavedProfile) && !showSavedProfiles;
 
   useEffect(() => {
     let active = true;
+    try {
+      const storedProfiles = JSON.parse(localStorage.getItem(STAFF_PROFILE_STORAGE_KEY) || '[]');
+      if (Array.isArray(storedProfiles)) {
+        const validProfiles = storedProfiles.filter((profile) => (
+          profile && ['STAFF', 'ADMIN'].includes(profile.role)
+          && typeof profile.name === 'string'
+          && typeof profile.rank === 'string'
+          && typeof profile.position === 'string'
+          && ['LSPD', 'LSSD'].includes(profile.department)
+        ));
+        queueMicrotask(() => {
+          if (!active) return;
+          setSavedProfiles(validProfiles);
+          if (validProfiles.length > 0) {
+            const profile = validProfiles[0];
+            setProfileSelection('0');
+            setInputRole(profile.role);
+            setInputName(profile.name);
+            setInputRank(profile.rank);
+            setInputPosition(profile.position);
+            setInputDepartment(profile.department);
+          }
+        });
+      }
+    } catch {
+      // Ignore invalid or unavailable local profile storage.
+    }
+
     fetch('/api/internal/session')
       .then((response) => response.json())
       .then((data) => {
@@ -78,9 +114,55 @@ export default function InternalLayout({ children }) {
       setUserRole(data.userRole);
       setInputPin('');
       setIsAuth(true);
+      if (rememberProfile) {
+        const profile = {
+          role: data.userRole,
+          name: data.officerName,
+          rank: data.officerRank,
+          position: data.officerPosition || '',
+          department: data.officerDepartment,
+        };
+        const profileId = `${profile.role}:${profile.name.toLocaleLowerCase()}:${profile.department}`;
+        const updatedProfiles = [
+          profile,
+          ...savedProfiles.filter((saved) => `${saved.role}:${saved.name.toLocaleLowerCase()}:${saved.department}` !== profileId),
+        ].slice(0, 8);
+        try {
+          localStorage.setItem(STAFF_PROFILE_STORAGE_KEY, JSON.stringify(updatedProfiles));
+          setSavedProfiles(updatedProfiles);
+        } catch {
+          setPinError('Sesi berhasil masuk, tetapi profil tidak dapat disimpan di perangkat ini.');
+        }
+      }
     } catch {
       setPinError('Tidak dapat terhubung ke layanan autentikasi.');
     }
+  };
+
+  const applySavedProfile = (selectedIndex) => {
+    const profile = savedProfiles[selectedIndex];
+    if (!profile) return;
+    setProfileSelection(String(selectedIndex));
+    setShowSavedProfiles(false);
+    setInputRole(profile.role);
+    setInputName(profile.name);
+    setInputRank(profile.rank);
+    setInputPosition(profile.position);
+    setInputDepartment(profile.department);
+    setInputPin('');
+    setPinError('');
+  };
+
+  const useOtherIdentity = () => {
+    setProfileSelection('');
+    setShowSavedProfiles(false);
+    setInputRole('STAFF');
+    setInputName('');
+    setInputRank('');
+    setInputPosition('');
+    setInputDepartment('');
+    setInputPin('');
+    setPinError('');
   };
 
   const handleLogout = async () => {
@@ -98,8 +180,8 @@ export default function InternalLayout({ children }) {
 
   if (!isAuth) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-        <div className="max-w-md w-full max-h-[calc(100vh-3rem)] overflow-y-auto bg-slate-800 border border-slate-700 rounded-2xl p-8 text-center space-y-6 shadow-2xl">
+      <div className="staff-login-page">
+        <div className="staff-login-card text-center shadow-2xl">
           <div className="staff-login-back-row">
             <Link
               href="/"
@@ -109,22 +191,69 @@ export default function InternalLayout({ children }) {
               Kembali
             </Link>
           </div>
-          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto text-white font-black text-2xl shadow-lg shadow-blue-500/30">
-            R
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">RNT Internal Portal</h2>
-            <p className="text-xs text-slate-400 mt-1">Lengkapi identitas dinas, peran, dan PIN portal internal.</p>
+          <div className="staff-login-heading">
+            <div className="staff-login-mark w-14 h-14 bg-[#254532] rounded-2xl flex items-center justify-center mx-auto text-white font-black text-2xl shadow-lg shadow-[#254532]/20">R</div>
+            <div>
+              <span className="staff-login-eyebrow">AKSES PERSONEL RNT</span>
+              <h2 className="text-xl font-bold text-white">RNT Internal Portal</h2>
+              <p className="text-xs text-slate-400 mt-1">Lengkapi identitas dinas, peran, dan PIN portal internal.</p>
+            </div>
           </div>
 
           {pinError && (
-            <div className="p-3 bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-bold rounded-lg">
+            <div className="staff-login-error p-3 bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-bold rounded-lg">
               {pinError}
             </div>
           )}
           
-          <form onSubmit={handleLogin} className="space-y-4 text-left">
-            <fieldset className="staff-login-roles">
+          <form onSubmit={handleLogin} className="staff-login-form text-left">
+            {savedProfiles.length > 0 && (
+              <div className="staff-login-profiles space-y-2">
+                {showSavedProfiles ? (
+                  <div className="staff-login-profile-picker rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold text-slate-700">Pilih profil tersimpan</p>
+                      <button type="button" onClick={() => setShowSavedProfiles(false)} className="staff-login-text-link text-[10px] font-semibold">Batal</button>
+                    </div>
+                    <div className="space-y-2">
+                      {savedProfiles.map((profile, index) => (
+                        <button
+                          key={`${profile.role}:${profile.name}:${profile.department}`}
+                          type="button"
+                          onClick={() => applySavedProfile(index)}
+                          className="staff-login-profile-option flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-[#9ab49f] hover:bg-[#f3f7f2]"
+                        >
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#e7efe7] text-sm font-bold text-[#315842]">{profile.name.slice(0, 1).toUpperCase()}</span>
+                          <span className="min-w-0 flex-1">
+                            <strong className="block break-words text-xs text-slate-800">{profile.name}</strong>
+                            <small className="mt-0.5 block break-words text-[10px] text-slate-500">{profile.rank} · {profile.role} · {profile.department}</small>
+                          </span>
+                          <span className="text-xs font-semibold text-[#315842]">Pilih</span>
+                        </button>
+                      ))}
+                    </div>
+                    <button type="button" onClick={useOtherIdentity} className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-600 hover:border-[#9ab49f] hover:text-[#315842]">Gunakan Identitas Lain</button>
+                  </div>
+                ) : usingSavedProfile ? (
+                  <div>
+                    <div className="staff-login-profile-picker grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+                      <span className="grid h-10 w-10 place-items-center rounded-full bg-[#e7efe7] text-sm font-bold text-[#315842]">{selectedSavedProfile.name.slice(0, 1).toUpperCase()}</span>
+                      <span className="min-w-0">
+                        <strong className="block break-words text-sm leading-5 text-slate-900">{selectedSavedProfile.name}</strong>
+                        <small className="mt-0.5 block break-words text-[11px] leading-4 text-slate-500">{selectedSavedProfile.rank}</small>
+                      </span>
+                      <button type="button" onClick={() => setShowSavedProfiles(true)} className="staff-login-text-link whitespace-nowrap text-[10px] font-semibold">Ganti Profil</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setShowSavedProfiles(true)} className="staff-login-profile-option w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:border-[#9ab49f] hover:text-[#315842]">Pilih profil tersimpan</button>
+                )}
+              </div>
+            )}
+
+            {!usingSavedProfile && (
+              <>
+            <fieldset className="staff-login-roles form-span-all">
               <legend className="block text-xs font-bold text-slate-300 mb-2">Peran sesi *</legend>
               <div className="grid grid-cols-2 gap-2">
                 {[
@@ -137,7 +266,7 @@ export default function InternalLayout({ children }) {
                       name="staff-role"
                       value={role.id}
                       checked={inputRole === role.id}
-                      onChange={() => setInputRole(role.id)}
+                      onChange={() => { setInputRole(role.id); setProfileSelection(''); }}
                     />
                     <span><strong>{role.label}</strong><small>{role.detail}</small></span>
                     <span className="staff-login-role-check" aria-hidden="true">✓</span>
@@ -146,42 +275,42 @@ export default function InternalLayout({ children }) {
               </div>
             </fieldset>
 
-            <div>
+            <div className="staff-login-field">
               <label className="block text-xs font-bold text-slate-300 mb-1">Nama Officer / Admin *</label>
               <input 
                 type="text" 
                 required
-                className="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-lg text-sm focus:outline-none focus:border-blue-500" 
+                className="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-lg text-sm focus:outline-none focus:border-[#315842]" 
                 placeholder="Contoh: Lucas D Riverra" 
                 value={inputName} 
-                onChange={e => setInputName(e.target.value)} 
+                onChange={e => { setInputName(e.target.value); setProfileSelection(''); }} 
               />
             </div>
 
-            <div>
+            <div className="staff-login-field">
               <label className="block text-xs font-bold text-slate-300 mb-1">Pangkat *</label>
               <input
                 type="text"
                 required
                 maxLength={60}
-                className="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-lg text-sm focus:outline-none focus:border-[#315842]"
                 placeholder="Contoh: Lieutenant"
                 value={inputRank}
-                onChange={e => setInputRank(e.target.value)}
+                onChange={e => { setInputRank(e.target.value); setProfileSelection(''); }}
               />
             </div>
 
-            <div>
+            <div className="staff-login-field form-span-all">
               <label className="block text-xs font-bold text-slate-300 mb-1">Divisi / jabatan <span className="font-normal text-slate-500">(opsional)</span></label>
               <input
                 type="text"
                 list="staff-position-options"
                 maxLength={100}
                 autoComplete="off"
-                className="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-lg text-sm focus:outline-none focus:border-[#315842]"
                 placeholder="Pilih atau ketik divisi/jabatan"
                 value={inputPosition}
-                onChange={e => setInputPosition(e.target.value)}
+                onChange={e => { setInputPosition(e.target.value); setProfileSelection(''); }}
               />
               <datalist id="staff-position-options">
                 <option value="Recruitment And Training Division" />
@@ -190,7 +319,7 @@ export default function InternalLayout({ children }) {
               <p className="mt-1 text-left text-[10px] text-slate-500">Pilih saran atau ketik langsung pada kolom.</p>
             </div>
 
-            <fieldset className="staff-login-departments">
+            <fieldset className="staff-login-departments form-span-all">
               <legend className="block text-xs font-bold text-slate-300 mb-2">Departemen *</legend>
               <p className="staff-login-department-hint">Pilih departemen yang akan dicantumkan pada tanda tangan balasan CV.</p>
               <div className="grid grid-cols-2 gap-2">
@@ -206,37 +335,56 @@ export default function InternalLayout({ children }) {
                       aria-label={department.name}
                       required
                       checked={inputDepartment === department.id}
-                      onChange={() => setInputDepartment(department.id)}
+                      onChange={() => { setInputDepartment(department.id); setProfileSelection(''); }}
                     />
-                    <span className="staff-department-logo"><Image src={department.logo} alt="" width={44} height={44} /></span>
+                    <span className="staff-department-logo"><Image src={department.logo} alt="" width={36} height={36} /></span>
                     <span className="staff-department-copy"><strong>{department.id}</strong><small>{department.name}</small></span>
                     <span className="staff-department-check" aria-hidden="true">✓</span>
                   </label>
                 ))}
               </div>
             </fieldset>
+              </>
+            )}
 
-            <div>
+            <div className="staff-login-field staff-login-pin-field">
               <label className="block text-xs font-bold text-slate-300 mb-1">
                 PIN Akses {inputRole === 'ADMIN' ? 'Admin Team RNT' : 'Staff'} *
               </label>
               <input 
+                id="pin-akses"
                 type="password" 
                 required
-                maxLength={8}
-                className="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-lg text-sm focus:outline-none focus:border-blue-500 text-center tracking-widest font-mono text-lg" 
-                placeholder="••••" 
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                className="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-lg text-sm focus:outline-none focus:border-[#315842] tracking-widest font-mono text-lg" 
+                style={{ textAlign: 'center', direction: 'ltr' }}
+                placeholder="Masukkan PIN Akses" 
                 value={inputPin} 
                 onChange={e => setInputPin(e.target.value)} 
               />
             </div>
 
-            <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm hover:bg-blue-500 transition shadow-lg shadow-blue-600/20">
+            {!usingSavedProfile && (
+              <label className="staff-login-remember flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={rememberProfile}
+                  onChange={(event) => setRememberProfile(event.target.checked)}
+                className="h-4 w-4 accent-[#315842]"
+                />
+                Ingat profil ini di perangkat saya
+              </label>
+            )}
+
+            <button type="submit" className="staff-login-submit w-full bg-[#254532] text-white py-3 rounded-lg font-bold text-sm hover:bg-[#315a41] transition shadow-lg shadow-[#254532]/20">
               Masuk Sesi {inputRole}
             </button>
           </form>
 
-          <div className="text-[10px] text-slate-500 pt-2 border-t border-slate-700/50">
+          <div className="staff-login-footer text-[10px] text-slate-500 pt-2 border-t border-slate-700/50">
             AKSES INTERNAL · RNT PROJECT PERSONNEL
           </div>
         </div>

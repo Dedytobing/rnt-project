@@ -323,7 +323,7 @@ export default function ReviewPage() {
   const countInterview = candidates.filter(c => c.status_cv === 'Interview').length;
 
   return (
-    <div className="space-y-4">
+    <div className="review-page space-y-4">
       {/* HEADER & TAB NAVIGATION */}
       <div className="flex justify-between items-center bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
         <div>
