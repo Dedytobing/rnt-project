@@ -1,12 +1,39 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+
+function publicBatchName(name) {
+  return String(name || 'Batch rekrutmen')
+    .replace(/\btest\b/gi, '')
+    .replace(/\s*[-–—:]\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Batch rekrutmen';
+}
+
+function formatRegistrationDeadline(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  const parts = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric',
+  }).format(date);
+  const time = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(date);
+  return `${parts}, pukul ${time} WIB`;
+}
 
 export default function CandidatePage() {
   const [candForm, setCandForm] = useState({ nama: '', gender: '', linkCv: '' });
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState({ show: false, msg: '', type: '' });
+  const [activeBatch, setActiveBatch] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/batches', { cache: 'no-store' }).then((response) => response.json())
+      .then((data) => { if (data.success) setActiveBatch(data.batch); })
+      .catch(() => setActiveBatch(null));
+  }, []);
 
   const handleCandSubmit = async (event) => {
     event.preventDefault();
@@ -17,7 +44,7 @@ export default function CandidatePage() {
       const response = await fetch('/api/candidates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'ADD_CANDIDATE', ...candForm }),
+        body: JSON.stringify({ action: 'ADD_CANDIDATE', ...candForm, batchId: activeBatch?.id }),
       });
       const data = await response.json();
 
@@ -38,7 +65,7 @@ export default function CandidatePage() {
     <main className="candidate-page">
       <header className="candidate-header">
         <Link href="/" className="candidate-brand"><span className="candidate-brand-mark">R</span><span>RED Project<small>Recruitment</small></span></Link>
-        <Link href="/internal/dashboard" className="candidate-staff-link">Portal staff <span>↗</span></Link>
+        <Link href="/internal/select-batch" className="candidate-staff-link">Portal staff <span>↗</span></Link>
       </header>
 
       <section className="candidate-form-wrap">
@@ -46,6 +73,7 @@ export default function CandidatePage() {
           <span className="candidate-kicker">PENDAFTARAN KANDIDAT</span>
           <h1>Form kandidat baru</h1>
           <p>Isi data diri dan tautan thread CV forum untuk memulai proses seleksi.</p>
+          {activeBatch ? <p className="candidate-announcement mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Pendaftaran <strong>{publicBatchName(activeBatch.name)}</strong> resmi dibuka sampai {formatRegistrationDeadline(activeBatch.registration_end)}.</p> : <p className="candidate-announcement mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">Pendaftaran belum dibuka. Silakan kembali saat batch baru tersedia.</p>}
         </div>
 
         <form onSubmit={handleCandSubmit} className="candidate-form">
@@ -86,7 +114,7 @@ export default function CandidatePage() {
 
           {alert.show && <div role="status" className={`candidate-alert ${alert.type}`}>{alert.msg}</div>}
 
-          <button className="candidate-submit" type="submit" disabled={loading}>
+          <button className="candidate-submit" type="submit" disabled={loading || !activeBatch}>
             {loading ? 'Mengirim pendaftaran…' : 'Kirim pendaftaran'}
             {!loading && <span aria-hidden="true">→</span>}
           </button>

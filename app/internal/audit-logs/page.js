@@ -103,6 +103,8 @@ export default function AuditLogsPage() {
             <option value="INTERVIEW">🟣 INTERVIEW (Wawancara)</option>
             <option value="ADMIN_OVERRIDE">🔴 ADMIN_OVERRIDE (Team RED)</option>
             <option value="REGISTER">⚪ REGISTER (Pendaftaran)</option>
+            <option value="LOGIN_SUCCESS">✅ LOGIN_SUCCESS</option>
+            <option value="LOGIN_FAILURE">⚠ LOGIN_FAILURE</option>
           </select>
         </div>
 

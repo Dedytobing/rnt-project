@@ -1,13 +1,15 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import Image from 'next/image';
 import CandidateLogs from '../components/CandidateLogs';
 import Pagination, { PAGE_SIZE } from '../components/Pagination';
+import { BatchContext, candidatesUrl } from '../BatchContext';
 
 const LOGO_LSSD = '/logos/lssd.png';
 const LOGO_LSPD = '/logos/lspd.png';
 
 export default function InterviewPage() {
+  const { selectedBatch } = useContext(BatchContext);
   const [candidates, setCandidates] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -21,9 +23,10 @@ export default function InterviewPage() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [stageAccessError, setStageAccessError] = useState('');
 
   const fetchData = async () => {
-    const res = await fetch('/api/candidates');
+    const res = await fetch(candidatesUrl(selectedBatch?.id, 'interview'));
     const data = await res.json();
     if (data.success) {
       setCandidates(data.data.filter(c => c.status_cv === 'Interview' && (!c.status_interview || c.status_interview === 'Pending')));
@@ -33,15 +36,20 @@ export default function InterviewPage() {
 
   useEffect(() => {
     let active = true;
-    fetch('/api/candidates')
-      .then((response) => response.json())
-      .then((data) => {
-        if (active && data.success) setCandidates(data.data.filter((candidate) =>
+    const loadStage = () => fetch(candidatesUrl(selectedBatch?.id, 'interview'))
+      .then(async (response) => ({ response, data: await response.json() }))
+      .then(({ response, data }) => {
+        if (!active) return;
+        if (!response.ok || !data.success) { setStageAccessError(data.error || 'Akses interview belum dibuka.'); setCandidates([]); setSelectedId(''); return; }
+        setStageAccessError('');
+        setCandidates(data.data.filter((candidate) =>
           candidate.status_cv === 'Interview' && (!candidate.status_interview || candidate.status_interview === 'Pending')
         ));
-      });
-    return () => { active = false; };
-  }, []);
+      }).catch(() => { if (active) { setCandidates([]); setStageAccessError('Jadwal interview gagal diverifikasi.'); } });
+    loadStage();
+    const timer = window.setInterval(loadStage, 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [selectedBatch?.id]);
 
   const displayedCandidates = candidates.filter(c =>
     c.nama.toLowerCase().includes(search.toLowerCase())
@@ -74,7 +82,7 @@ export default function InterviewPage() {
 
     setLoading(true);
     
-    const res = await fetch('/api/candidates', {
+    const res = await fetch(candidatesUrl(selectedBatch?.id, 'interview'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -99,6 +107,7 @@ export default function InterviewPage() {
 
   return (
     <div className="interview-page space-y-4">
+      {stageAccessError && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{stageAccessError}</div>}
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
         <h1 className="text-xl font-bold text-slate-800">Sesi Wawancara (Interview Panel)</h1>
         <p className="text-xs text-slate-500">Catat hasil wawancara dan minat departemen kandidat. Penempatan akhir ditentukan Team RED.</p>
@@ -286,3 +295,4 @@ export default function InterviewPage() {
     </div>
   );
 }
+

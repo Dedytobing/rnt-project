@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Pagination, { PAGE_SIZE } from '../components/Pagination';
+import { BatchContext, candidatesUrl } from '../BatchContext';
 
 const departments = [
   { id: 'LSSD', label: "Los Santos Sheriff's Department", logo: '/logos/lssd.png' },
@@ -59,6 +60,7 @@ ${signature || 'Recruitment Staff'}[/right]
 }
 
 export default function PlacementPage() {
+  const { selectedBatch } = useContext(BatchContext);
   const [role, setRole] = useState('');
   const [candidates, setCandidates] = useState([]);
   const [selectedId, setSelectedId] = useState('');
@@ -74,11 +76,11 @@ export default function PlacementPage() {
   const [academyMessage, setAcademyMessage] = useState('');
 
   const loadCandidates = useCallback(async () => {
-    const response = await fetch('/api/candidates');
+    const response = await fetch(candidatesUrl(selectedBatch?.id));
     const data = await response.json();
     if (!response.ok || !data.success) throw new Error(data.error || 'Gagal memuat kandidat.');
     setCandidates(data.data || []);
-  }, []);
+  }, [selectedBatch?.id]);
 
   useEffect(() => {
     let active = true;

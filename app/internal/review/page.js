@@ -1,7 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import CandidateLogs from '../components/CandidateLogs';
 import Pagination, { PAGE_SIZE } from '../components/Pagination';
+import { BatchContext, candidatesUrl } from '../BatchContext';
 
 const PENDING_REASON_OPTIONS = [
   {
@@ -138,6 +139,7 @@ ${signature || 'Recruitment Staff'}[/right]
 }
 
 export default function ReviewPage() {
+  const { selectedBatch } = useContext(BatchContext);
   const [candidates, setCandidates] = useState([]);
   const [viewMode, setViewMode] = useState('NEW'); // 'NEW', 'PENDING', atau 'INTERVIEW'
   const [selectedId, setSelectedId] = useState('');
@@ -158,6 +160,7 @@ export default function ReviewPage() {
   const [interviewDetailsByCandidate, setInterviewDetailsByCandidate] = useState({});
   const [staffProfile, setStaffProfile] = useState({ name: '', rank: '', position: '', department: '' });
   const [copyMessage, setCopyMessage] = useState('');
+  const [stageAccessError, setStageAccessError] = useState('');
 
   useEffect(() => {
     fetch('/api/internal/session')
@@ -177,19 +180,23 @@ export default function ReviewPage() {
 
   useEffect(() => {
     let active = true;
-    fetch('/api/candidates')
-      .then((response) => response.json())
-      .then((data) => {
-        if (!active || !data.success) return;
+    const loadStage = () => fetch(candidatesUrl(selectedBatch?.id, 'review'))
+      .then(async (response) => ({ response, data: await response.json() }))
+      .then(({ response, data }) => {
+        if (!active) return;
+        if (!response.ok || !data.success) { setStageAccessError(data.error || 'Akses review belum dibuka.'); setCandidates([]); setSelectedId(''); return; }
+        setStageAccessError('');
         setCandidates(data.data.filter((candidate) =>
           !['Accepted', 'Rejected'].includes(candidate.status_cv) && !candidate.status_interview
         ));
-      });
-    return () => { active = false; };
-  }, []);
+      }).catch(() => { if (active) { setCandidates([]); setStageAccessError('Jadwal review gagal diverifikasi.'); } });
+    loadStage();
+    const timer = window.setInterval(loadStage, 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [selectedBatch?.id]);
 
   const fetchData = async () => {
-    const res = await fetch('/api/candidates');
+    const res = await fetch(candidatesUrl(selectedBatch?.id, 'review'));
     const data = await res.json();
     if (data.success) {
       const activeCandidates = data.data.filter(
@@ -254,7 +261,7 @@ export default function ReviewPage() {
 
     setLoading(true);
     
-    const res = await fetch('/api/candidates', {
+    const res = await fetch(candidatesUrl(selectedBatch?.id, 'review'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -324,6 +331,7 @@ export default function ReviewPage() {
 
   return (
     <div className="review-page space-y-4">
+      {stageAccessError && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{stageAccessError}</div>}
       {/* HEADER & TAB NAVIGATION */}
       <div className="flex justify-between items-center bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
         <div>
@@ -720,3 +728,4 @@ export default function ReviewPage() {
     </div>
   );
 }
+

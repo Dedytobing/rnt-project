@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { 
   Chart as ChartJS, 
   ArcElement, 
@@ -11,6 +11,7 @@ import {
 } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
 import Pagination, { PAGE_SIZE } from '../components/Pagination';
+import { BatchContext, candidatesUrl } from '../BatchContext';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
@@ -76,6 +77,7 @@ const departmentLogoPlugin = {
 };
 
 export default function InternalDashboard() {
+  const { selectedBatch } = useContext(BatchContext);
   const [candidates, setCandidates] = useState([]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -89,7 +91,9 @@ export default function InternalDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    fetch('/api/candidates')
+    setLoading(true);
+    setLoadError('');
+    fetch(candidatesUrl(selectedBatch?.id))
       .then(async response => {
         const result = await response.json();
         if (!response.ok || !result.success) {
@@ -99,7 +103,7 @@ export default function InternalDashboard() {
       })
       .catch(error => setLoadError(error.message || 'Data kandidat gagal dimuat.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedBatch?.id]);
 
   // Reset ke halaman 1 setiap kali filter atau kata kunci berubah
   useEffect(() => {

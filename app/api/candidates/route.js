@@ -1,30 +1,11 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
 import { appendReviewerName } from '@/lib/reviewers';
+import { isCandidateServiceConfigured, registerCandidate } from '@/lib/candidate-registration';
 import { getInternalSession } from '@/lib/internal-session';
-
-// Helper pencetak log aktivitas dengan Logging Terminal Error
-async function createAuditLog(candidateId, officerName, roleAction, details) {
-  if (!candidateId || !officerName) {
-    console.warn('⚠️ Audit Log dibatalkan: candidateId atau officerName kosong.');
-    return;
-  }
-
-  const { error } = await supabase.from('candidate_logs').insert([
-    {
-      candidate_id: candidateId,
-      officer_name: officerName,
-      role_action: roleAction,
-      action_details: details
-    }
-  ]);
-
-  if (error) {
-    console.error('❌ Error simpan candidate_logs di Supabase:', error.message);
-  } else {
-    console.log(`✅ Audit Log tersimpan: [${officerName}] - [${roleAction}]`);
-  }
-}
+import { createInternalDataClient } from '@/lib/supabase-server';
+import { candidateActionSchema, candidateQuerySchema, readValidatedJson } from '@/lib/validation';
+import { enforceRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { checkCandidateStageWindow } from '@/lib/stage-access';
 
 function isMissingPreferenceColumn(error) {
   return ['PGRST204', '42703'].includes(error?.code) &&
@@ -34,37 +15,66 @@ function isMissingPreferenceColumn(error) {
 // GET: Ambil Data Kandidat / Log Spesifik Kandidat
 export async function GET(request) {
   try {
-    if (!getInternalSession(request)) {
+    const session = getInternalSession(request);
+    if (!session) {
       return NextResponse.json({ success: false, error: 'Sesi staff diperlukan.' }, { status: 401 });
     }
+    const supabase = createInternalDataClient(session);
 
     const { searchParams } = new URL(request.url);
-    const candidateId = searchParams.get('candidate_id');
-
+    const query = candidateQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));
+    if (!query.success) return NextResponse.json({ success: false, error: 'Filter permintaan tidak valid.' }, { status: 400 });
+    const candidateId = query.data.candidate_id;
+    if (query.data.deleted === 'true' && session.role !== 'ADMIN') {
+      return NextResponse.json({ success: false, error: 'Data terhapus hanya dapat diakses Admin RNT.' }, { status: 403 });
+    }
     // Jika dipanggil dengan candidate_id -> kembalikan histori log kandidat tersebut
     if (candidateId) {
-      const { data: logs, error: logErr } = await supabase
-        .from('candidate_logs')
-        .select('*')
-        .eq('candidate_id', candidateId)
-        .order('created_at', { ascending: false });
+      const { data: logs, error: logErr } = await supabase.rpc('get_candidate_logs', {
+        p_candidate_id: candidateId,
+      });
 
       if (logErr) {
         console.error('Candidate audit log query failed:', logErr);
-        return NextResponse.json({ success: false, error: logErr.message, code: logErr.code }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'Riwayat kandidat gagal dimuat.' }, { status: 500 });
       }
-      return NextResponse.json({ success: true, logs });
+      return NextResponse.json({ success: true, logs }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
     // GET Seluruh Kandidat
-    const { data, error } = await supabase
+    let batchId = query.data.batch_id;
+    if (!batchId && query.data.deleted !== 'true') {
+      const { data: activeBatch, error: batchError } = await supabase.from('recruitment_batches').select('id').eq('is_active', true).is('deleted_at', null).maybeSingle();
+      if (batchError) return NextResponse.json({ success: false, error: 'Batch aktif gagal dimuat.' }, { status: 503 });
+      batchId = activeBatch?.id;
+    }
+    if (!batchId && query.data.deleted !== 'true') return NextResponse.json({ success: true, data: [] }, { headers: { 'Cache-Control': 'private, no-store' } });
+    if (batchId) {
+      const { data: visibleBatch, error: visibleBatchError } = await supabase.from('recruitment_batches').select('id').eq('id', batchId).is('deleted_at', null).maybeSingle();
+      if (visibleBatchError) return NextResponse.json({ success: false, error: 'Batch gagal diverifikasi.' }, { status: 503 });
+      if (!visibleBatch) return NextResponse.json({ success: false, error: 'Batch tidak ditemukan.' }, { status: 404 });
+    }
+    if (query.data.stage) {
+      const { data: stageBatch, error: stageError } = await supabase.from('recruitment_batches').select(`${query.data.stage}_start,${query.data.stage}_end`).eq('id', batchId).is('deleted_at', null).maybeSingle();
+      if (stageError || !stageBatch) return NextResponse.json({ success: false, error: 'Jadwal tahap gagal diverifikasi.' }, { status: 503 });
+      const now = Date.now();
+      if (now < Date.parse(stageBatch[`${query.data.stage}_start`]) || now > Date.parse(stageBatch[`${query.data.stage}_end`])) {
+        return NextResponse.json({ success: false, error: `Akses ${query.data.stage} belum dibuka atau sudah ditutup sesuai jadwal batch.` }, { status: 403 });
+      }
+    }
+    let candidateQuery = supabase
       .from('candidates')
       .select('*')
       .order('created_at', { ascending: false });
+    candidateQuery = query.data.deleted === 'true'
+      ? candidateQuery.not('deleted_at', 'is', null)
+      : candidateQuery.is('deleted_at', null);
+    if (batchId) candidateQuery = candidateQuery.eq('batch_id', batchId);
+    const { data, error } = await candidateQuery;
 
     if (error) {
       console.error('Candidate list query failed:', error);
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: 500 });
+      return NextResponse.json({ success: false, error: 'Data kandidat gagal dimuat.' }, { status: 500 });
     }
 
     const cleanData = (data || []).map(c => ({
@@ -78,71 +88,75 @@ export async function GET(request) {
       status_interview: c.status_interview || ''
     }));
 
-    return NextResponse.json({ success: true, data: cleanData });
+    return NextResponse.json({ success: true, data: cleanData }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     console.error('Candidates API GET failed:', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Data kandidat gagal dimuat.' }, { status: 500 });
   }
 }
 
 // POST: Aksi Update & Registrasi
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const requestLimited = await enforceRateLimit(request, {
+      namespace: 'candidate-api',
+      limit: 60,
+      windowSeconds: 10 * 60,
+    });
+    const requestRateError = rateLimitResponse(requestLimited);
+    if (requestRateError) return requestRateError;
+
+    const parsedBody = await readValidatedJson(request, candidateActionSchema);
+    if (!parsedBody.data) {
+      return NextResponse.json({ success: false, error: parsedBody.error }, { status: parsedBody.status });
+    }
+    const body = parsedBody.data;
     const { action } = body;
 
     // 1. TAMBAH KANDIDAT BARU (Public Form)
     if (action === 'ADD_CANDIDATE') {
-      const { nama, gender, linkCv } = body;
-      const candidateName = typeof nama === 'string' ? nama.trim() : '';
-      const candidateGender = typeof gender === 'string' ? gender.trim() : '';
-      const candidateCv = typeof linkCv === 'string' ? linkCv.trim() : '';
-
-      if (!candidateName || !['Male', 'Female'].includes(candidateGender) || !candidateCv) {
-        return NextResponse.json({ success: false, error: 'Nama, gender, dan tautan CV wajib diisi dengan format yang valid.' }, { status: 400 });
+      const limited = await enforceRateLimit(request, { namespace: 'candidate-registration', limit: 5, windowSeconds: 60 * 60 });
+      const rateError = rateLimitResponse(limited);
+      if (rateError) return rateError;
+      if (!isCandidateServiceConfigured()) {
+        return NextResponse.json({ success: false, error: 'Layanan pendaftaran belum dikonfigurasi.' }, { status: 503 });
       }
 
-      try {
-        const parsedCv = new URL(candidateCv);
-        if (!['http:', 'https:'].includes(parsedCv.protocol)) throw new Error('Unsupported protocol');
-      } catch {
-        return NextResponse.json({ success: false, error: 'Tautan CV harus berupa URL http atau https yang valid.' }, { status: 400 });
-      }
-
-      const { data: existing, error: duplicateCheckError } = await supabase
-        .from('candidates')
-        .select('id')
-        .or(`nama.ilike.${candidateName},link_cv.eq.${candidateCv}`);
-
-      if (duplicateCheckError) {
-        console.error('Candidate duplicate check failed:', duplicateCheckError);
-        return NextResponse.json({ success: false, error: `Pemeriksaan duplikasi gagal: ${duplicateCheckError.message}` }, { status: 500 });
-      }
-
-      if (existing && existing.length > 0) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Nama atau Link CV sudah terdaftar!' 
-        }, { status: 400 });
-      }
-
-      const { data: newCand, error } = await supabase.from('candidates').insert([
-        { nama: candidateName, gender: candidateGender, link_cv: candidateCv }
-      ]).select().single();
+      const { nama: candidateName, gender: candidateGender, linkCv: candidateCv, batchId } = body;
+      const { data: registration, error } = await registerCandidate({
+        name: candidateName,
+        gender: candidateGender,
+        cvUrl: candidateCv,
+        batchId,
+      });
 
       if (error) {
         console.error('Candidate registration insert failed:', error);
-        return NextResponse.json({ success: false, error: `Data kandidat gagal disimpan: ${error.message}` }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'Data kandidat gagal disimpan. Coba lagi nanti.' }, { status: 500 });
+      }
+      if (registration?.status === 'duplicate') {
+        return NextResponse.json({ success: false, error: 'Nama atau Link CV sudah terdaftar!' }, { status: 400 });
       }
 
-      await createAuditLog(newCand.id, 'Sistem Publik', 'REGISTER', 'Kandidat mendaftarkan CV baru.');
       return NextResponse.json({ success: true, message: 'CV berhasil didaftarkan!' });
+    }
+
+    const origin = request.headers.get('origin');
+    if (origin && origin !== new URL(request.url).origin) {
+      return NextResponse.json({ success: false, error: 'Asal permintaan tidak valid.' }, { status: 403 });
+    }
+    const session = getInternalSession(request);
+    if (!session) return NextResponse.json({ success: false, error: 'Sesi staff diperlukan.' }, { status: 401 });
+    const supabase = createInternalDataClient(session);
+
+    if (session.role === 'STAFF' && ['UPDATE_EVALUATION', 'UPDATE_INTERVIEW'].includes(action)) {
+      const stage = action === 'UPDATE_EVALUATION' ? 'review' : 'interview';
+      const access = await checkCandidateStageWindow(supabase, body.id, stage);
+      if (!access.allowed) return NextResponse.json({ success: false, error: access.message }, { status: access.status });
     }
 
     // 2. EVALUASI CV (Staff / Evaluator)
     if (action === 'UPDATE_EVALUATION') {
-      const session = getInternalSession(request);
-      if (!session) return NextResponse.json({ success: false, error: 'Sesi staff diperlukan.' }, { status: 401 });
       const { id, statusCv, mdtCheck, catatan, saran, notesInvestigator } = body;
       const staffName = session.name;
 
@@ -153,7 +167,8 @@ export async function POST(request) {
         .maybeSingle();
 
       if (currentCandidateError) {
-        return NextResponse.json({ success: false, error: currentCandidateError.message }, { status: 500 });
+        console.error('Candidate review lookup failed:', currentCandidateError);
+        return NextResponse.json({ success: false, error: 'Evaluasi kandidat gagal dimuat.' }, { status: 500 });
       }
 
       if (!currentCandidate) {
@@ -172,22 +187,16 @@ export async function POST(request) {
         updated_at: new Date()
       }).eq('id', id);
 
-      if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-
-      await createAuditLog(
-        id, 
-        staffName,
-        'REVIEW_CV', 
-        `Mengubah Status CV: [${statusCv}], MDT Check: [${mdtCheck}]. Catatan: ${catatan || '-'}`
-      );
+      if (error) {
+        console.error('Candidate review update failed:', error);
+        return NextResponse.json({ success: false, error: 'Evaluasi kandidat gagal disimpan.' }, { status: 500 });
+      }
 
       return NextResponse.json({ success: true, message: 'Evaluasi CV berhasil disimpan!' });
     }
 
     // 3. SESI WAWANCARA (Interviewer)
     if (action === 'UPDATE_INTERVIEW') {
-      const session = getInternalSession(request);
-      if (!session) return NextResponse.json({ success: false, error: 'Sesi staff diperlukan.' }, { status: 401 });
       const { id, assistName, statusInterview, deptPreference = '', notesInterviewer } = body;
       if (!['', 'LSSD', 'LSPD'].includes(deptPreference)) {
         return NextResponse.json({ success: false, error: 'Preferensi departemen tidak valid.' }, { status: 400 });
@@ -215,14 +224,10 @@ export async function POST(request) {
         preferenceSaved = false;
       }
 
-      if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-
-      await createAuditLog(
-        id, 
-        session.name,
-        'INTERVIEW', 
-        `Hasil Interview: [${statusInterview}], Preferensi Departemen: [${deptPreference || 'Tidak ada'}]${preferenceSaved ? '' : ' (belum tersimpan: kolom dept_preference belum tersedia)'}. Status CV tetap pada tahap [Interview].`
-      );
+      if (error) {
+        console.error('Candidate interview update failed:', error);
+        return NextResponse.json({ success: false, error: 'Hasil interview gagal disimpan.' }, { status: 500 });
+      }
 
       return NextResponse.json({
         success: true,
@@ -235,7 +240,6 @@ export async function POST(request) {
 
     // 4. OVERRIDE ADMIN (Team RED)
     if (action === 'ADMIN_OVERRIDE_CANDIDATE') {
-      const session = getInternalSession(request);
       if (session?.role !== 'ADMIN') {
         return NextResponse.json({ success: false, error: 'Hanya Team RED yang dapat mengubah keputusan akhir.' }, { status: 403 });
       }
@@ -256,7 +260,7 @@ export async function POST(request) {
           .eq('id', id)
           .maybeSingle();
 
-        if (candidateError) return NextResponse.json({ success: false, error: candidateError.message }, { status: 500 });
+        if (candidateError) return NextResponse.json({ success: false, error: 'Data penempatan gagal dimuat.' }, { status: 500 });
         if (!candidate) return NextResponse.json({ success: false, error: 'Kandidat tidak ditemukan.' }, { status: 404 });
         if (candidate.status_interview !== 'Passed') {
           return NextResponse.json({ success: false, error: 'Departemen final hanya dapat ditetapkan untuk kandidat yang lulus interview.' }, { status: 409 });
@@ -267,8 +271,7 @@ export async function POST(request) {
           updated_at: new Date(),
         }).eq('id', id);
 
-        if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-        await createAuditLog(id, session.name, 'ADMIN_OVERRIDE', `Team RED menetapkan departemen final ${mappingDept} untuk ${candidate.nama}.`);
+        if (error) return NextResponse.json({ success: false, error: 'Penempatan gagal disimpan.' }, { status: 500 });
         return NextResponse.json({ success: true, message: `Penempatan final ${candidate.nama} diperbarui ke ${mappingDept}.` });
       }
 
@@ -286,14 +289,7 @@ export async function POST(request) {
 
       const { error } = await supabase.from('candidates').update(updates).eq('id', id);
 
-      if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-
-      await createAuditLog(
-        id, 
-        session.name,
-        'ADMIN_OVERRIDE', 
-        `Admin Team RED melakukan override data kandidat. Status CV: [${statusCv}], Department final: [${mappingDept || 'tidak diubah'}].`
-      );
+      if (error) return NextResponse.json({ success: false, error: 'Perubahan kandidat gagal disimpan.' }, { status: 500 });
 
       return NextResponse.json({ success: true, message: 'Data kandidat diperbarui oleh Team RED!' });
     }
@@ -301,6 +297,6 @@ export async function POST(request) {
     return NextResponse.json({ success: false, error: 'Aksi tidak valid.' }, { status: 400 });
   } catch (err) {
     console.error('Candidates API request failed:', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Permintaan belum dapat diproses.' }, { status: 500 });
   }
 }
