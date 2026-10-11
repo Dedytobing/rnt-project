@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
+import { unstable_rethrow } from 'next/navigation';
 import { getInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
 import { auditQuerySchema } from '@/lib/validation';
 
 export async function GET(request) {
   try {
-    const query = auditQuerySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));
+    const query = auditQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams.entries()));
     if (!query.success) return NextResponse.json({ success: false, error: 'Filter permintaan tidak valid.' }, { status: 400 });
     const session = getInternalSession(request);
     if (session?.role !== 'ADMIN') {
@@ -72,6 +73,9 @@ export async function GET(request) {
 
       return NextResponse.json({ success: true, logs: enrichedLogs }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    // Next uses internal exceptions to defer request-dependent work during prerendering.
+    // Let those control-flow signals pass through instead of treating them as API failures.
+    unstable_rethrow(error);
     console.error('Audit log request failed:', error);
     return NextResponse.json(
       { success: false, error: 'Audit log gagal dimuat.' },
