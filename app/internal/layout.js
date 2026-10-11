@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -127,7 +127,7 @@ function batchStatus(batch, now) {
   return { label: 'Terjadwal', className: 'bg-sky-100 text-sky-800 ring-sky-200' };
 }
 
-export default function InternalLayout({ children }) {
+function InternalLayoutContent({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [officerName, setOfficerName] = useState('');
@@ -795,5 +795,13 @@ export default function InternalLayout({ children }) {
       </main>
     </div>
     </BatchContext.Provider>
+  );
+}
+
+export default function InternalLayout({ children }) {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#f3f5f2]" aria-label="Memuat portal personel" />}>
+      <InternalLayoutContent>{children}</InternalLayoutContent>
+    </Suspense>
   );
 }
