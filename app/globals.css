@@ -61,6 +61,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #6e9877
 .staff-content .grid.grid-cols-12 { gap: 12px; }.staff-content .grid.grid-cols-12 > .col-span-6 { grid-column: span 6 / span 6; min-width: 0; }.staff-content .grid.grid-cols-12 > .col-span-4 { grid-column: span 4 / span 4; min-width: 0; }.staff-content .grid.grid-cols-12 > .col-span-8 { grid-column: span 8 / span 8; min-width: 0; }
 .staff-content .overflow-x-auto { border-radius: 5px; }.staff-content table { font-size: 10px !important; }.staff-content thead th { color: #78867c !important; background: #f6f8f5 !important; font-size: 8px; font-weight: 800; letter-spacing: .55px; text-transform: uppercase; }.staff-content tbody tr:hover { background: #f8faf7 !important; }
 .staff-content .max-h-\[500px\] button { border-radius: 6px; }.staff-content .max-h-\[500px\] button:hover { border-color: #b5c8b6; }.staff-content .max-h-\[500px\] button.bg-blue-50\/80 { background: #f0f6ee !important; border-color: #8cad82 !important; }
+.management-page .management-filter-tab { font-size: 11px; font-weight: 500; }
 .staff-content .max-h-40 > div { background: #f8faf7 !important; border-color: #e5ebe4 !important; }.staff-content .border-b { border-color: #e8ede7 !important; }
 .candidate-staff-info { margin: 4px 0 8px; padding: 9px 10px; display: grid; gap: 7px; background: #f7f9f6; border: 1px solid #e5ebe4; border-radius: 5px; }.candidate-staff-info > div { display: flex; justify-content: space-between; gap: 12px; color: #78867c; font-size: 9px; }.candidate-staff-info strong { color: #2f4938; font-size: 10px; font-weight: 700; text-align: right; }
 .staff-panel { background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 8px #26382c06; }.staff-panel-heading { padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }.staff-panel-heading h2 { margin: 6px 0 4px; color: #263a2d; font-size: 17px; }.staff-panel-heading p { margin: 0; color: #7a887e; font-size: 10px; }.staff-section-label { color: #839186; font-size: 8px; font-weight: 800; letter-spacing: 1.2px; }.staff-admin-pill { padding: 5px 8px; color: #805340; background: #f7ede7; border: 1px solid #efdbcd; border-radius: 999px; font-size: 8px; font-weight: 800; letter-spacing: .6px; white-space: nowrap; }.staff-notice { padding: 10px 13px; border: 1px solid; border-radius: 6px; font-size: 10px; }.staff-notice.success { color: #326344; background: #f0f7ef; border-color: #d8e9d5; }.staff-notice.error { color: #934c3c; background: #fff3ef; border-color: #f0d8ce; }
@@ -553,3 +554,40 @@ html[data-theme="dark"] .staff-login-card .staff-login-profile-picker > span:fir
 html[data-theme="dark"] .staff-login-card .staff-login-profile-option > span:first-child { color: #111827 !important; }
 .staff-login-card .staff-login-avatar { color: #1e3a2b !important; background: #e7efe7 !important; }
 html[data-theme="dark"] .staff-login-card .staff-login-avatar { color: #1e3a2b !important; background: #dce9dd !important; }
+
+/* Management page contrast refinements for dark mode. */
+html[data-theme="dark"] .management-page tbody tr:hover,
+html[data-theme="dark"] .management-page tbody tr:hover td { color: #e4ece5 !important; background: #24352b !important; }
+html[data-theme="dark"] .management-page .management-module-card[aria-pressed="true"] { color: #e4ece5 !important; background: #1c3024 !important; border-color: #4f9462 !important; box-shadow: 0 0 0 2px #4f946233 !important; }
+html[data-theme="dark"] .management-page .management-module-card[aria-pressed="true"] > span:nth-child(2) { color: #a7d5ae !important; }
+html[data-theme="dark"] .management-page .management-module-card[aria-pressed="true"] > span:nth-child(3) { color: #c6d5c9 !important; }
+html[data-theme="dark"] .management-page .management-module-card > span:nth-child(2) { color: #a7d5ae !important; }
+html[data-theme="dark"] .management-page .management-module-card > span:nth-child(3) { color: #d2ddd4 !important; }
+html[data-theme="dark"] .management-page .management-eyebrow { color: #a7d5ae !important; }
+html[data-theme="dark"] .management-page .management-panel-eyebrow { color: #a7d5ae !important; }
+html[data-theme="dark"] .management-page .management-edit-members { color: #a7d5ae !important; }
+html[data-theme="dark"] .management-page .management-edit-members:hover { color: #e4ece5 !important; background: #24352b !important; }
+html[data-theme="dark"] .management-page .management-filter-tab { font-size: 11px !important; font-weight: 500 !important; }
+html[data-theme="dark"] .management-page .management-filter-tab:not([aria-pressed="true"]) { color: #c6d5c9 !important; }
+html[data-theme="dark"] .management-page .management-pic-member-pill { color: #e5efe7 !important; background: #26382c !important; border: 1px solid #3b5141 !important; box-shadow: none !important; font-weight: 500 !important; }
+html[data-theme="dark"] .management-page .management-attendance-status { color: #cbd5cf !important; }
+html[data-theme="dark"] .management-page .management-candidate-group-badge { border: 0 !important; outline: 0 !important; box-shadow: none !important; }
+html[data-theme="dark"] .management-page .management-candidate-group-badge.bg-emerald-50 { color: #c6dfca !important; background: #24352b !important; }
+html[data-theme="dark"] .management-page .management-candidate-group-badge.bg-emerald-700 { color: #f0f5f1 !important; background: #315842 !important; }
+html[data-theme="dark"] .management-page .management-candidate-group-badge.bg-amber-100 { color: #e7d39b !important; background: #3a3322 !important; }
+html[data-theme="dark"] .staff-topbar .staff-batch-switcher { color: #dce6de !important; background: #1c3024 !important; border-color: #4b7053 !important; }
+html[data-theme="dark"] .staff-topbar .staff-batch-switcher:hover { color: #f0f5f1 !important; background: #294734 !important; border-color: #6a9b74 !important; }
+
+.staff-role-toast { position: fixed; z-index: 1000; top: 20px; right: 20px; width: min(360px, calc(100vw - 32px)); max-width: 360px; display: flex; align-items: flex-start; gap: 12px; padding: 15px 16px; color: #78350f; background: #fffbeb; border: 1px solid #fbbf24; border-radius: 14px; box-shadow: 0 16px 40px #171f1880; text-align: left; animation: staff-role-toast-in .32s cubic-bezier(.2,.8,.2,1) both; }
+.staff-role-toast-icon { width: 24px; height: 24px; flex: 0 0 24px; display: grid; place-items: center; color: #fff; background: #d97706; border-radius: 50%; font-size: 14px; font-weight: 800; }
+.staff-role-toast-copy { min-width: 0; flex: 1; }
+.staff-role-toast-copy strong { display: block; color: #78350f; font-size: 13px; font-weight: 800; }
+.staff-role-toast-copy p { display: -webkit-box; margin: 4px 0 0; overflow: hidden; color: #92400e; font-size: 12px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.staff-role-toast-copy b { color: #78350f; font-weight: 800; }
+.staff-role-toast-close { width: 27px; height: 27px; flex: 0 0 27px; display: grid; place-items: center; padding: 0; color: #92400e; background: transparent; border: 0; border-radius: 7px; font-size: 22px; line-height: 1; cursor: pointer; }
+.staff-role-toast-close:hover { color: #451a03; background: #fef3c7; }
+.staff-login-submit { display: inline-flex; align-items: center; justify-content: center; }
+.staff-login-spinner { width: 15px; height: 15px; display: inline-block; flex: 0 0 15px; margin-right: 8px; border: 2px solid #ffffff80; border-top-color: #fff; border-radius: 50%; animation: staff-login-spin .7s linear infinite; }
+@keyframes staff-login-spin { to { transform: rotate(360deg); } }
+@keyframes staff-role-toast-in { from { opacity: 0; transform: translate3d(16px,-8px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+@media (max-width: 520px) { .staff-role-toast { top: 12px; right: 12px; width: calc(100vw - 24px); padding: 13px; } }

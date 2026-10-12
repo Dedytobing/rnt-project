@@ -243,7 +243,7 @@ export async function POST(request) {
       if (session?.role !== 'ADMIN') {
         return NextResponse.json({ success: false, error: 'Hanya Team RED yang dapat mengubah keputusan akhir.' }, { status: 403 });
       }
-      const { id, nama, statusCv, mdtCheck, mappingDept, statusInterview, catatan, notesInvestigator, notesInterviewer, departmentOnly } = body;
+      const { id, nama, linkCv, statusCv, mdtCheck, mappingDept, statusInterview, catatan, notesInvestigator, notesInterviewer, departmentOnly } = body;
 
       if (mappingDept && !['LSSD', 'LSPD'].includes(mappingDept)) {
         return NextResponse.json({ success: false, error: 'Departemen final tidak valid.' }, { status: 400 });
@@ -277,6 +277,7 @@ export async function POST(request) {
 
       const updates = {
         nama,
+        ...(linkCv ? { link_cv: linkCv } : {}),
         status_cv: statusCv,
         mdt_check: mdtCheck,
         status_interview: statusInterview,

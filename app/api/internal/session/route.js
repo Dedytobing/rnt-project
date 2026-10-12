@@ -57,8 +57,8 @@ export async function POST(request) {
 
   const limited = await enforceRateLimit(request, {
     namespace: 'personnel-pin-login',
-    limit: 8,
-    windowSeconds: 15 * 60,
+    limit: 18,
+    windowSeconds: 2 * 60,
   });
   const rateLimitError = rateLimitResponse(limited);
   if (rateLimitError) return rateLimitError;
@@ -69,8 +69,8 @@ export async function POST(request) {
   const profileLimited = await enforceRateLimit(request, {
     namespace: 'personnel-pin-login-role',
     identifier: parsed.data.role,
-    limit: 6,
-    windowSeconds: 15 * 60,
+    limit: 18,
+    windowSeconds: 2 * 60,
   });
   const profileRateError = rateLimitResponse(profileLimited);
   if (profileRateError) return profileRateError;
@@ -85,10 +85,15 @@ export async function POST(request) {
   let whitelistedName;
   try {
     const db = createServiceRoleClient();
+    const lookupStartedAt = performance.now();
     const [whitelistResult, personnelResult] = await Promise.all([
       db.from('rnt_personnel_name_whitelist').select('full_name,normalized_name,role').eq('normalized_name', normalizedName).eq('is_active', true).maybeSingle(),
       db.from('rnt_personnel').select('id,full_name,normalized_name,role,rank,position,department,is_active').eq('normalized_name', normalizedName).eq('is_active', true).maybeSingle(),
     ]);
+    const lookupLatencyMs = Math.round(performance.now() - lookupStartedAt);
+    if (lookupLatencyMs > 500) {
+      console.warn('Personnel login database lookup latency is high:', { latencyMs: lookupLatencyMs });
+    }
     if (whitelistResult.error) throw whitelistResult.error;
     if (personnelResult.error) throw personnelResult.error;
     whitelistedName = whitelistResult.data;
@@ -97,9 +102,23 @@ export async function POST(request) {
     console.error('Personnel whitelist lookup failed:', error);
     return noStore({ success: false, error: 'Daftar verifikasi personel belum tersedia.' }, 503);
   }
-  if (!whitelistedName || whitelistedName.role !== role || (personnel && personnel.role !== role)) {
+  if (!whitelistedName) {
     await recordLoginFailure({ request, name, role, personnelId: personnel?.id || null });
     return noStore({ success: false, error: 'Nama atau peran tidak terdaftar sebagai personel aktif.' }, 401);
+  }
+  if (whitelistedName.role !== role) {
+    await recordLoginFailure({ request, name: whitelistedName.full_name, role, personnelId: personnel?.id || null });
+    return noStore({
+      success: false,
+      code: 'ROLE_MISMATCH',
+      name: whitelistedName.full_name,
+      registeredRole: whitelistedName.role,
+      error: `Akses Peran Tidak Sesuai: Nama ${whitelistedName.full_name} terdaftar sebagai ${whitelistedName.role}. Silakan sesuaikan pilihan Peran Sesi Anda.`,
+    }, 401);
+  }
+  if (personnel && personnel.role !== role) {
+    await recordLoginFailure({ request, name: personnel.full_name, role, personnelId: personnel.id });
+    return noStore({ success: false, error: 'Profil personel tidak sesuai dengan whitelist. Hubungi Admin RNT.' }, 401);
   }
   if (!verifyInternalPin(parsed.data.pin, role, Date.now(), pinIdentity)) {
     await recordLoginFailure({ request, name: personnel?.full_name || whitelistedName.full_name, role, personnelId: personnel?.id || null });

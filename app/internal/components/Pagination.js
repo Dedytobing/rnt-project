@@ -21,7 +21,7 @@ export default function Pagination({ page, totalItems, onPageChange }) {
             onClick={() => onPageChange(page - 1)}
             className="rounded-lg border border-slate-300 px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            ← Sebelumnya
+            Previous
           </button>
           <span className="whitespace-nowrap text-slate-500">Halaman {page} dari {pageCount}</span>
           <button
@@ -30,7 +30,7 @@ export default function Pagination({ page, totalItems, onPageChange }) {
             onClick={() => onPageChange(page + 1)}
             className="rounded-lg border border-slate-300 px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Berikutnya →
+            Next
           </button>
         </div>
       )}

@@ -145,6 +145,9 @@ function InternalLayoutContent({ children }) {
   const [savedProfile, setSavedProfile] = useState(null);
   const [useSavedProfile, setUseSavedProfile] = useState(false);
   const [pinError, setPinError] = useState('');
+  const [roleToast, setRoleToast] = useState(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [rateLimitSeconds, setRateLimitSeconds] = useState(0);
   const [isAuth, setIsAuth] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [batches, setBatches] = useState([]);
@@ -159,6 +162,16 @@ function InternalLayoutContent({ children }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+  useEffect(() => {
+    if (!roleToast) return undefined;
+    const timer = window.setTimeout(() => setRoleToast(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [roleToast]);
+  useEffect(() => {
+    if (rateLimitSeconds <= 0) return undefined;
+    const timer = window.setTimeout(() => setRateLimitSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [rateLimitSeconds]);
   const pageMeta = {
     '/internal/dashboard': ['Dashboard', 'Ringkasan aktivitas dan progres rekrutmen'],
     '/internal/review': ['Review CV', 'Evaluasi profil kandidat dan hasil MDT'],
@@ -392,7 +405,10 @@ function InternalLayoutContent({ children }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (isLoggingIn) return;
     setPinError('');
+    setRoleToast(null);
+    setIsLoggingIn(true);
     try {
       const response = await fetch('/api/internal/session', {
         method: 'POST',
@@ -408,6 +424,15 @@ function InternalLayoutContent({ children }) {
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
+        if (response.status === 429) {
+          setRateLimitSeconds(Math.max(1, Number(data.retryAfter) || Number(response.headers.get('Retry-After')) || 1));
+          setPinError('');
+          return;
+        }
+        if (data.code === 'ROLE_MISMATCH') {
+          setRoleToast({ name: data.name || inputName.trim(), role: data.registeredRole || 'STAFF' });
+          return;
+        }
         setPinError(data.error || 'Tidak dapat memverifikasi sesi.');
         return;
       }
@@ -444,6 +469,8 @@ function InternalLayoutContent({ children }) {
       router.replace('/internal/select-batch');
     } catch {
       setPinError('Tidak dapat terhubung ke layanan autentikasi.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -472,6 +499,7 @@ function InternalLayoutContent({ children }) {
   if (!isAuth) {
     return (
       <div className="staff-login-page">
+          {roleToast && <aside className="staff-role-toast" role="alert" aria-live="assertive"><span className="staff-role-toast-icon" aria-hidden="true">!</span><div className="staff-role-toast-copy"><strong>Akses Peran Tidak Sesuai</strong><p><b>{roleToast.name}</b> terdaftar sebagai <b>{roleToast.role}</b>. Silakan sesuaikan Pilihan Peran Sesi.</p></div><button type="button" onClick={() => setRoleToast(null)} aria-label="Tutup pemberitahuan" className="staff-role-toast-close">×</button></aside>}
         <div className="staff-login-card text-center shadow-2xl">
           <div className="staff-login-back-row">
             <Link
@@ -492,10 +520,15 @@ function InternalLayoutContent({ children }) {
           </div>
 
           {pinError && (
-            <div className="staff-login-error p-3 bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-bold rounded-lg">
+              <div className="staff-login-error p-3 bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-bold rounded-lg">
               {pinError}
             </div>
           )}
+            {rateLimitSeconds > 0 && (
+              <div className="staff-login-error p-3 bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-200 text-xs font-bold rounded-lg" role="status" aria-live="polite">
+                Terlalu banyak mencoba. Silakan tunggu {rateLimitSeconds} detik lagi.
+              </div>
+            )}
           
           <form onSubmit={handleLogin} className="staff-login-form text-left">
             {useSavedProfile && savedProfile ? <>
@@ -510,7 +543,7 @@ function InternalLayoutContent({ children }) {
                 <label className="block text-xs font-bold text-slate-300 mb-1">PIN Akses {inputRole === 'ADMIN' ? 'Admin Team RNT' : 'Staff'} *</label>
                 <input id="pin-akses" type="password" required maxLength={6} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" className="staff-login-pin-input w-full rounded-lg border bg-slate-50 text-sm font-mono tracking-widest" placeholder="Masukkan PIN Akses" value={inputPin} onChange={(event) => setInputPin(event.target.value.replace(/\D/g, '').slice(0, 6))} />
               </div>
-              <button type="submit" className="staff-login-submit form-span-all w-full rounded-lg bg-[#254532] py-3 text-sm font-bold text-white shadow-lg shadow-[#254532]/20 transition hover:bg-[#315a41]">Masuk Sesi {inputRole}</button>
+              <button type="submit" disabled={isLoggingIn || rateLimitSeconds > 0} aria-busy={isLoggingIn} className="staff-login-submit form-span-all w-full rounded-lg bg-[#254532] py-3 text-sm font-bold text-white shadow-lg shadow-[#254532]/20 transition hover:bg-[#315a41] disabled:cursor-wait disabled:opacity-75">{isLoggingIn && <span className="staff-login-spinner" aria-hidden="true" />}{isLoggingIn ? 'Memverifikasi…' : rateLimitSeconds > 0 ? `Tunggu ${rateLimitSeconds} detik` : `Masuk Sesi ${inputRole}`}</button>
             </> : <>
             {savedProfile && <section className="staff-login-profile-picker staff-login-profiles form-span-all border p-3 text-left">
               <div className="mb-2 flex items-center justify-between"><strong className="text-xs">Pilih profil tersimpan</strong><button type="button" onClick={() => { setInputName(savedProfile.name || ''); setInputRank(savedProfile.rank || ''); setInputPosition(savedProfile.position || ''); setInputDepartment(savedProfile.department || ''); setInputRole(savedProfile.role || 'STAFF'); setInputPin(''); setRememberProfile(true); setUseSavedProfile(Boolean(savedProfile.department)); }} className="staff-login-text-link">Batal</button></div>
@@ -637,8 +670,8 @@ function InternalLayoutContent({ children }) {
               <input type="checkbox" checked={rememberProfile} onChange={(event) => setRememberProfile(event.target.checked)} className="h-4 w-4 accent-emerald-600" />
               <span>Ingat profil ini di perangkat saya</span>
             </label>
-            <button type="submit" className="staff-login-submit w-full bg-[#254532] text-white py-3 rounded-lg font-bold text-sm hover:bg-[#315a41] transition shadow-lg shadow-[#254532]/20">
-              Masuk Sesi {inputRole}
+            <button type="submit" disabled={isLoggingIn || rateLimitSeconds > 0} aria-busy={isLoggingIn} className="staff-login-submit w-full bg-[#254532] text-white py-3 rounded-lg font-bold text-sm hover:bg-[#315a41] transition shadow-lg shadow-[#254532]/20 disabled:cursor-wait disabled:opacity-75">
+              {isLoggingIn && <span className="staff-login-spinner" aria-hidden="true" />}{isLoggingIn ? 'Memverifikasi…' : rateLimitSeconds > 0 ? `Tunggu ${rateLimitSeconds} detik` : `Masuk Sesi ${inputRole}`}
             </button>
             </>}
           </form>
@@ -789,7 +822,7 @@ function InternalLayoutContent({ children }) {
       <main className="flex-1 staff-main">
         <header className="staff-topbar">
           <div><div className="staff-breadcrumb">RNT PROJECT <span>/</span> PERSONNEL</div><h1>{pageTitle}</h1><p>{pageSubtitle}</p></div>
-          <div className="staff-top-actions"><span className="staff-live"><i /> SISTEM AKTIF</span>{selectedBatch && <button type="button" onClick={() => setShowBatchPicker(true)} className="rounded-lg border border-[#1E3A2B]/20 bg-white px-3 py-2 text-xs font-bold text-[#1E3A2B] hover:bg-[#edf4ee]">Batch: {selectedBatch.name} · Ganti</button>}<Link href="/candidate" className="staff-new-candidate"><span>＋</span> Kandidat baru</Link></div>
+          <div className="staff-top-actions"><span className="staff-live"><i /> SISTEM AKTIF</span>{selectedBatch && <button type="button" onClick={() => setShowBatchPicker(true)} className="staff-batch-switcher rounded-lg border border-[#1E3A2B]/20 bg-white px-3 py-2 text-xs font-bold text-[#1E3A2B] hover:bg-[#edf4ee]">Batch: {selectedBatch.name} · Ganti</button>}<Link href="/candidate" className="staff-new-candidate"><span>＋</span> Kandidat baru</Link></div>
         </header>
         <div className="staff-content">{children}</div>
       </main>
