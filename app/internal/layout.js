@@ -141,6 +141,7 @@ function InternalLayoutContent({ children }) {
   const [inputDepartment, setInputDepartment] = useState('');
   const [inputRole, setInputRole] = useState('STAFF');
   const [inputPin, setInputPin] = useState('');
+  const [pinVerified, setPinVerified] = useState(false);
   const [rememberProfile, setRememberProfile] = useState(false);
   const [savedProfile, setSavedProfile] = useState(null);
   const [useSavedProfile, setUseSavedProfile] = useState(false);
@@ -177,7 +178,6 @@ function InternalLayoutContent({ children }) {
     '/internal/review': ['Review CV', 'Evaluasi profil kandidat dan hasil MDT'],
     '/internal/interview': ['Interview panel', 'Wawancara dan rekomendasi penempatan'],
     '/internal/audit-logs': ['Audit log', 'Riwayat aktivitas personel RNT'],
-    '/internal/placement': ['Penempatan akhir', 'Keputusan departemen khusus Team RNT'],
     '/internal/management': ['Manajemen PIC', 'Pembagian tanggung jawab Academy per batch'],
     '/internal/academy': ['Absensi Academy', 'Kehadiran kandidat dan PIC batch'],
     '/internal/absensi': ['Absensi Academy', 'Kehadiran kandidat dan PIC batch'],
@@ -223,7 +223,26 @@ function InternalLayoutContent({ children }) {
           sessionStorage.setItem('officer_role', data.userRole);
           setSelectedBatchId('');
           setShowBatchPicker(true);
+          setPinVerified(false);
+        } else if (data.pinVerified) {
+          const profile = {
+            name: data.officerName,
+            rank: data.officerRank || '',
+            position: data.officerPosition || '',
+            department: data.officerDepartment || '',
+            role: data.userRole,
+          };
+          setSavedProfile(profile);
+          setInputName(profile.name);
+          setInputRank(profile.rank);
+          setInputPosition(profile.position);
+          setInputDepartment(profile.department);
+          setInputRole(profile.role);
+          setInputPin('');
+          setUseSavedProfile(true);
+          setPinVerified(true);
         } else {
+          setPinVerified(false);
           sessionStorage.removeItem('officer_session');
           sessionStorage.removeItem('officer_role');
           sessionStorage.removeItem(SELECTED_BATCH_STORAGE_KEY);
@@ -424,6 +443,7 @@ function InternalLayoutContent({ children }) {
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
+        if (!inputPin && response.status === 401) setPinVerified(false);
         if (response.status === 429) {
           setRateLimitSeconds(Math.max(1, Number(data.retryAfter) || Number(response.headers.get('Retry-After')) || 1));
           setPinError('');
@@ -460,6 +480,7 @@ function InternalLayoutContent({ children }) {
       setOfficerPosition(data.officerPosition || inputPosition);
       setOfficerDepartment(data.officerDepartment || inputDepartment);
       setInputPin('');
+      setPinVerified(false);
       sessionStorage.removeItem(SELECTED_BATCH_STORAGE_KEY);
       localStorage.removeItem(SELECTED_BATCH_STORAGE_KEY);
       setSelectedBatchId('');
@@ -476,6 +497,22 @@ function InternalLayoutContent({ children }) {
 
   const handleLogout = async () => {
     await fetch('/api/internal/session', { method: 'DELETE' }).catch(() => {});
+    const lockedProfile = {
+      name: officerName,
+      rank: officerRank,
+      position: officerPosition,
+      department: officerDepartment,
+      role: userRole,
+    };
+    setSavedProfile(lockedProfile);
+    setInputName(lockedProfile.name);
+    setInputRank(lockedProfile.rank);
+    setInputPosition(lockedProfile.position);
+    setInputDepartment(lockedProfile.department);
+    setInputRole(lockedProfile.role);
+    setInputPin('');
+    setUseSavedProfile(true);
+    setPinVerified(true);
     sessionStorage.removeItem('officer_session');
     sessionStorage.removeItem('officer_role');
     sessionStorage.removeItem(SELECTED_BATCH_STORAGE_KEY);
@@ -513,7 +550,7 @@ function InternalLayoutContent({ children }) {
           <div className="staff-login-heading">
             <div>
               <h2 className="text-xl font-bold text-white">RNT Internal Portal</h2>
-              <p className="text-xs text-slate-400 mt-1">Lengkapi identitas dinas, peran, dan PIN portal internal.</p>
+              <p className="text-xs text-slate-400 mt-1">{pinVerified ? 'Profil tersimpan dan verifikasi PIN masih aktif selama 24 jam.' : 'Lengkapi identitas dinas, peran, dan PIN portal internal.'}</p>
             </div>
           </div>
 
@@ -535,17 +572,23 @@ function InternalLayoutContent({ children }) {
                   <span className="staff-login-avatar grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#e7efe7] font-bold text-[#1E3A2B]">{(savedProfile.name || 'R').slice(0, 1).toUpperCase()}</span>
                   <span className="min-w-0 text-left"><strong className="block truncate text-sm">{savedProfile.name}</strong><small className="block truncate">{savedProfile.rank}{savedProfile.position ? ` · ${savedProfile.position}` : ''}</small></span>
                 </div>
-                <button type="button" onClick={() => { setUseSavedProfile(false); setInputPin(''); setPinError(''); }} className="staff-login-text-link shrink-0">Ganti Profil</button>
+                <button type="button" onClick={() => { setUseSavedProfile(false); setPinVerified(false); setInputPin(''); setPinError(''); }} className="staff-login-text-link shrink-0">Ganti Profil</button>
               </div>
-              <div className="staff-login-field staff-login-pin-field form-span-all">
-                <label className="block text-xs font-bold text-slate-300 mb-1">PIN Akses {inputRole === 'ADMIN' ? 'Admin Team RNT' : 'Staff'} *</label>
-                <input id="pin-akses" type="password" required maxLength={6} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" className="staff-login-pin-input w-full rounded-lg border bg-slate-50 text-sm font-mono tracking-widest" placeholder="Masukkan PIN Akses" value={inputPin} onChange={(event) => setInputPin(event.target.value.replace(/\D/g, '').slice(0, 6))} />
-              </div>
+              {pinVerified ? (
+                <p className="form-span-all rounded-lg border border-emerald-700/40 bg-emerald-900/20 px-3 py-2 text-center text-xs font-semibold text-emerald-200" role="status">
+                  Sesi PIN aktif. Klik tombol untuk melanjutkan.
+                </p>
+              ) : (
+                <div className="staff-login-field staff-login-pin-field form-span-all">
+                  <label className="block text-xs font-bold text-slate-300 mb-1">PIN Akses {inputRole === 'ADMIN' ? 'Admin Team RNT' : 'Staff'} *</label>
+                  <input id="pin-akses" type="password" required maxLength={6} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" className="staff-login-pin-input w-full rounded-lg border bg-slate-50 text-sm font-mono tracking-widest" placeholder="Masukkan PIN Akses" value={inputPin} onChange={(event) => setInputPin(event.target.value.replace(/\D/g, '').slice(0, 6))} />
+                </div>
+              )}
               <button type="submit" disabled={isLoggingIn || rateLimitSeconds > 0} aria-busy={isLoggingIn} className="staff-login-submit form-span-all w-full rounded-lg bg-[#254532] py-3 text-sm font-bold text-white shadow-lg shadow-[#254532]/20 transition hover:bg-[#315a41] disabled:cursor-wait disabled:opacity-75">{isLoggingIn && <span className="staff-login-spinner" aria-hidden="true" />}{isLoggingIn ? 'Memverifikasi…' : rateLimitSeconds > 0 ? `Tunggu ${rateLimitSeconds} detik` : `Masuk Sesi ${inputRole}`}</button>
             </> : <>
             {savedProfile && <section className="staff-login-profile-picker staff-login-profiles form-span-all border p-3 text-left">
-              <div className="mb-2 flex items-center justify-between"><strong className="text-xs">Pilih profil tersimpan</strong><button type="button" onClick={() => { setInputName(savedProfile.name || ''); setInputRank(savedProfile.rank || ''); setInputPosition(savedProfile.position || ''); setInputDepartment(savedProfile.department || ''); setInputRole(savedProfile.role || 'STAFF'); setInputPin(''); setRememberProfile(true); setUseSavedProfile(Boolean(savedProfile.department)); }} className="staff-login-text-link">Batal</button></div>
-              <button type="button" onClick={() => { setInputName(savedProfile.name || ''); setInputRank(savedProfile.rank || ''); setInputPosition(savedProfile.position || ''); setInputDepartment(savedProfile.department || ''); setInputRole(savedProfile.role || 'STAFF'); setInputPin(''); setRememberProfile(true); setUseSavedProfile(Boolean(savedProfile.department)); }} className="staff-login-profile-option flex w-full items-center justify-between gap-3 border p-2.5 text-left">
+              <div className="mb-2 flex items-center justify-between"><strong className="text-xs">Pilih profil tersimpan</strong><button type="button" onClick={() => { setInputName(savedProfile.name || ''); setInputRank(savedProfile.rank || ''); setInputPosition(savedProfile.position || ''); setInputDepartment(savedProfile.department || ''); setInputRole(savedProfile.role || 'STAFF'); setInputPin(''); setPinVerified(false); setRememberProfile(true); setUseSavedProfile(Boolean(savedProfile.department)); }} className="staff-login-text-link">Batal</button></div>
+              <button type="button" onClick={() => { setInputName(savedProfile.name || ''); setInputRank(savedProfile.rank || ''); setInputPosition(savedProfile.position || ''); setInputDepartment(savedProfile.department || ''); setInputRole(savedProfile.role || 'STAFF'); setInputPin(''); setPinVerified(false); setRememberProfile(true); setUseSavedProfile(Boolean(savedProfile.department)); }} className="staff-login-profile-option flex w-full items-center justify-between gap-3 border p-2.5 text-left">
                 <span className="flex min-w-0 items-center gap-3"><span className="staff-login-avatar grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#e7efe7] font-bold">{(savedProfile.name || 'R').slice(0, 1).toUpperCase()}</span><span className="min-w-0"><strong className="block truncate text-sm">{savedProfile.name}</strong><small className="block truncate">{savedProfile.rank}{savedProfile.position ? ` · ${savedProfile.position}` : ''} · {savedProfile.role === 'ADMIN' ? 'ADMIN' : 'STAFF'}{savedProfile.department ? ` · ${savedProfile.department}` : ''}</small></span></span><span className="shrink-0 text-xs font-bold">Pilih</span>
               </button>
               <button type="button" onClick={() => { setInputName(''); setInputRank(''); setInputPosition(''); setInputDepartment(''); setInputRole('STAFF'); setInputPin(''); setRememberProfile(false); setPinError(''); }} className="staff-login-profile-option mt-2 w-full border p-2.5 text-sm">Gunakan Identitas Lain</button>
@@ -794,7 +837,6 @@ function InternalLayoutContent({ children }) {
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/absensi` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'absensi' || routeSection === 'academy' || pathname === '/internal/academy' ? 'active' : ''}`}><span>✓</span>Absensi Academy</Link>
             <Link href="/candidate" className="staff-nav-link"><span>＋</span>Input kandidat</Link>
             {userRole === 'ADMIN' && <>
-              <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/placement` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'placement' || pathname === '/internal/placement' ? 'active' : ''}`}><span>⌖</span>Penempatan akhir<span className="nav-admin-tag">RNT</span></Link>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/audit-log` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'audit-log' || pathname === '/internal/audit-logs' ? 'active' : ''}`}><span>≡</span>Audit log<span className="nav-admin-tag">RNT</span></Link>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/management` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'management' || pathname === '/internal/management' ? 'active' : ''}`}><span>⚙</span>Manajemen<span className="nav-admin-tag">RNT</span></Link>
             </>}

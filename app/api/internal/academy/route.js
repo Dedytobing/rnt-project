@@ -16,17 +16,15 @@ export async function GET(request) {
   if (!batch) return NextResponse.json({ success:false,error:'Batch tidak ditemukan.' },{status:404});
   const academyOpen = now >= Date.parse(batch.academy_start) && now <= Date.parse(batch.academy_end);
   if (session.role === 'STAFF' && !academyOpen) return NextResponse.json({ success:false,error:'Akses Academy hanya tersedia selama jadwal batch berlangsung.' },{status:403});
-  const [candidateResult, attendanceResult, personnelResult, groupResult, memberResult, candidateGroupResult] = await Promise.all([
-    db.from('candidates').select('id,nama,batch_id').eq('batch_id', batchId).is('deleted_at', null).order('nama'),
+  const [candidateResult, attendanceResult, personnelResult] = await Promise.all([
+    db.from('candidates').select('id,nama,batch_id,mapping_dept,dept_preference').eq('batch_id', batchId).is('deleted_at', null).order('nama'),
     db.from('academy_attendance').select('*').eq('batch_id', batchId),
-    db.from('rnt_personnel').select('id,full_name').eq('is_active', true).order('full_name'),
-    db.from('academy_pic_groups').select('id,batch_id,name').eq('batch_id', batchId),
-    db.from('academy_pic_group_members').select('group_id,batch_id,personnel_id').eq('batch_id', batchId),
-    db.from('academy_candidate_pic_groups').select('candidate_id,batch_id,group_id').eq('batch_id', batchId),
+    db.from('rnt_personnel').select('id,full_name,department').eq('is_active', true).order('full_name'),
   ]);
-  const failure = [candidateResult, attendanceResult, personnelResult, groupResult, memberResult, candidateGroupResult].find((result) => result.error);
+  const failure = [candidateResult, attendanceResult, personnelResult].find((result) => result.error);
   if (failure) return NextResponse.json({ success:false,error:'Daftar absensi Academy gagal dimuat.' },{status:503});
-  return NextResponse.json({ success:true,batches:[batch],candidates:candidateResult.data || [],attendance:attendanceResult.data || [],personnel:personnelResult.data || [],groups:groupResult.data || [],groupMembers:memberResult.data || [],candidateGroups:candidateGroupResult.data || [],role:session.role,personnelId:session.personnelId },{headers:{'Cache-Control':'private, no-store, max-age=0'}});
+  const personnel = personnelResult.data || [];
+  return NextResponse.json({ success:true,batches:[batch],candidates:candidateResult.data || [],attendance:attendanceResult.data || [],personnel,department:personnel.find((person) => person.id === session.personnelId)?.department || '',role:session.role,personnelId:session.personnelId },{headers:{'Cache-Control':'private, no-store, max-age=0'}});
 }
 
 export async function POST(request) {
@@ -41,20 +39,38 @@ export async function POST(request) {
   if (!validBody.success) return NextResponse.json({success:false,error:'Data absensi tidak valid.'},{status:400});
   const { candidateId, batchId, status } = validBody.data;
   const db = createInternalDataClient(session);
-  const { data: candidate, error: candidateError } = await db.from('candidates').select('batch_id').eq('id', candidateId).is('deleted_at', null).maybeSingle();
+  const { data: candidate, error: candidateError } = await db.from('candidates').select('nama,batch_id,mapping_dept,dept_preference').eq('id', candidateId).is('deleted_at', null).maybeSingle();
   if (candidateError) return NextResponse.json({success:false,error:'Kandidat gagal diverifikasi.'},{status:503});
   if (!candidate || candidate.batch_id !== batchId) return NextResponse.json({success:false,error:'Kandidat tidak ditemukan pada batch ini.'},{status:404});
   if (session.role === 'STAFF') {
     const access = await checkCandidateStageWindow(db, candidateId, 'academy');
     if (!access.allowed) return NextResponse.json({success:false,error:access.message},{status:access.status});
+    const { data: person, error: personError } = await db.from('rnt_personnel').select('department').eq('id', session.personnelId).eq('is_active', true).maybeSingle();
+    if (personError) return NextResponse.json({success:false,error:'Departemen akses gagal diverifikasi.'},{status:503});
+    const department = candidate.mapping_dept;
+    if (!person?.department || person.department !== department) return NextResponse.json({success:false,error:'Absensi hanya dapat diubah oleh personel departemen kandidat.'},{status:403});
   }
-  const { data: candidateGroup, error: assignmentError } = await db.from('academy_candidate_pic_groups').select('group_id').eq('candidate_id', String(candidateId)).eq('batch_id', batchId).maybeSingle();
-  if (assignmentError) return NextResponse.json({success:false,error:'Kelompok PIC gagal diverifikasi.'},{status:503});
-  if (!candidateGroup) return NextResponse.json({success:false,error:'Kandidat belum dimasukkan ke kelompok PIC.'},{status:403});
-  const { data: membership, error: membershipError } = await db.from('academy_pic_group_members').select('personnel_id').eq('group_id', candidateGroup.group_id).eq('batch_id', batchId).eq('personnel_id', session.personnelId).maybeSingle();
-  if (membershipError) return NextResponse.json({success:false,error:'Keanggotaan PIC gagal diverifikasi.'},{status:503});
-  if (!membership) return NextResponse.json({success:false,error:'Hanya personel dalam kelompok PIC kandidat yang dapat mencatat kehadiran.'},{status:403});
-  const { error } = await db.from('academy_attendance').update({ attendance_status:status, updated_by:session.name, updated_at:new Date().toISOString() }).eq('candidate_id',String(candidateId)).eq('batch_id',batchId);
-  if (error) return NextResponse.json({success:false,error:'Absensi gagal disimpan.'},{status:500});
+  const { data: previousAttendance, error: previousAttendanceError } = await db.from('academy_attendance')
+    .select('attendance_status').eq('candidate_id', String(candidateId)).eq('batch_id', batchId).maybeSingle();
+  if (previousAttendanceError) return NextResponse.json({ success:false,error:'Riwayat absensi kandidat gagal dimuat.' },{status:503});
+  const values = { attendance_status:status, updated_by:session.name, updated_at:new Date().toISOString() };
+  const { data: attendance, error: updateError } = await db.from('academy_attendance').update(values).eq('candidate_id',String(candidateId)).eq('batch_id',batchId).select('candidate_id').maybeSingle();
+  if (updateError) return NextResponse.json({success:false,error:'Absensi gagal disimpan.'},{status:500});
+  if (!attendance) {
+    const { error } = await db.from('academy_attendance').insert({ candidate_id:String(candidateId), batch_id:batchId, ...values });
+    if (error) return NextResponse.json({success:false,error:'Absensi gagal disimpan.'},{status:500});
+  }
+  if (previousAttendance?.attendance_status !== status) {
+    const statusName = { PENDING: 'Belum dicatat', PRESENT: 'Hadir', ABSENT: 'Tidak hadir', EXCUSED: 'Izin' };
+    const { error: auditError } = await db.from('personnel_audit_logs').insert({
+      personnel_id: session.personnelId,
+      personnel_name: session.name,
+      role: session.role,
+      event: 'ACADEMY_ATTENDANCE',
+      target_name: candidate.nama,
+      action_details: `Mengubah absensi Academy ${candidate.nama} dari ${statusName[previousAttendance?.attendance_status] || 'Belum dicatat'} menjadi ${statusName[status]}.`,
+    });
+    if (auditError) console.error('Academy attendance audit failed:', auditError);
+  }
   return NextResponse.json({success:true});
 }

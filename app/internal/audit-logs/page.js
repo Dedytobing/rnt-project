@@ -1,6 +1,33 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Pagination, { PAGE_SIZE } from '../components/Pagination';
+
+const ACTION_LABELS = {
+  REVIEW_CV: 'Review CV',
+  INTERVIEW: 'Interview',
+  ADMIN_OVERRIDE: 'Perubahan admin',
+  REGISTER: 'Pendaftaran kandidat',
+  SOFT_DELETE: 'Hapus kandidat',
+  RESTORE: 'Pemulihan kandidat',
+  LOGIN_SUCCESS: 'Login berhasil',
+  LOGIN_FAILURE: 'Login gagal',
+  LOGOUT: 'Logout',
+  SESSION_RESTORED: 'Sesi dipulihkan',
+  SESSION_RESUMED: 'Sesi dilanjutkan',
+  ACCESS_ADDED: 'Akses ditambahkan',
+  ACCESS_UPDATED: 'Akses diperbarui',
+  ACCESS_ROLE_CHANGED: 'Perubahan peran akses',
+  ACCESS_REMOVED: 'Akses dicabut',
+  BULK_ACCESS_UPDATED: 'Akses massal diperbarui',
+  PERSONNEL_ADDED: 'Personel ditambahkan',
+  PERSONNEL_UPDATED: 'Personel diperbarui',
+  PERSONNEL_DEACTIVATED: 'Personel dinonaktifkan',
+  ACADEMY_ATTENDANCE: 'Absensi Academy',
+  EQUIPMENT_UPDATE: 'Pembagian perlengkapan',
+  BATCH_CREATED: 'Batch dibuat',
+  BATCH_UPDATED: 'Jadwal batch diubah',
+  BATCH_DELETED: 'Batch dihapus',
+};
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState([]);
@@ -10,11 +37,7 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
@@ -28,7 +51,13 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // This effect starts an external request; state changes happen in its async lifecycle.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchLogs();
+  }, [fetchLogs]);
 
   const filteredLogs = logs.filter(log => {
     const matchSearch = 
@@ -42,10 +71,6 @@ export default function AuditLogsPage() {
   });
   const paginatedLogs = filteredLogs.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, filterAction]);
-
   return (
     <div className="space-y-6">
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center gap-4">
@@ -57,7 +82,7 @@ export default function AuditLogsPage() {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Riwayat tindakan pada kandidat yang tercatat otomatis oleh sistem.
+            Riwayat perubahan kandidat, akses personel, login, dan aktivitas Academy.
           </p>
         </div>
 
@@ -73,7 +98,7 @@ export default function AuditLogsPage() {
         {[
           ['Waktu', 'Tanggal dan jam tindakan dicatat.'],
           ['Staff / Executor', 'Nama personel yang menjalankan tindakan.'],
-          ['Kandidat', 'Kandidat yang terkait dengan tindakan tersebut.'],
+            ['Kandidat / Target', 'Kandidat, personel, atau batch yang terkait.'],
           ['Jenis dan detail', 'Pendaftaran, review CV, interview, atau keputusan Team RED beserta catatannya.'],
         ].map(([title, description]) => (
           <div key={title} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -91,20 +116,15 @@ export default function AuditLogsPage() {
             placeholder="Cari nama staff, kandidat, atau detail..." 
             className="border border-slate-300 p-2.5 rounded-lg text-xs text-slate-900 bg-white w-72 focus:outline-none focus:border-blue-500" 
             value={search} 
-            onChange={e => setSearch(e.target.value)} 
+            onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
           />
 
           <select 
             className="border border-slate-300 p-2 rounded-lg text-xs text-slate-900 bg-white font-bold focus:outline-none focus:border-blue-500" 
             value={filterAction} 
-            onChange={e => setFilterAction(e.target.value)}>
+            onChange={e => { setFilterAction(e.target.value); setCurrentPage(1); }}>
             <option value="ALL">Semua Jenis Action</option>
-            <option value="REVIEW_CV">🔵 REVIEW_CV (Evaluasi)</option>
-            <option value="INTERVIEW">🟣 INTERVIEW (Wawancara)</option>
-            <option value="ADMIN_OVERRIDE">🔴 ADMIN_OVERRIDE (Team RED)</option>
-            <option value="REGISTER">⚪ REGISTER (Pendaftaran)</option>
-            <option value="LOGIN_SUCCESS">✅ LOGIN_SUCCESS</option>
-            <option value="LOGIN_FAILURE">⚠ LOGIN_FAILURE</option>
+            {Object.entries(ACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </div>
 
@@ -115,7 +135,7 @@ export default function AuditLogsPage() {
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
                 <th className="p-3">Waktu</th>
                 <th className="p-3">Staff / Executor</th>
-                <th className="p-3">Kandidat</th>
+                <th className="p-3">Kandidat / Target</th>
                 <th className="p-3">Jenis Action</th>
                 <th className="p-3">Detail Perubahan / Catatan</th>
               </tr>
@@ -140,17 +160,17 @@ export default function AuditLogsPage() {
                       <td className="p-3 font-bold text-slate-800 whitespace-nowrap">
                         👤 {log.officer_name}
                       </td>
-                      <td className="p-3 font-bold text-blue-700 whitespace-nowrap">
-                        {log.candidates?.nama || 'Unknown Candidate'}
+                      <td className="p-3 font-bold text-slate-700 whitespace-nowrap">
+                        {log.candidates?.nama || log.target_name || '—'}
                       </td>
                       <td className="p-3 whitespace-nowrap">
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
                           log.role_action === 'ADMIN_OVERRIDE' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
                           log.role_action === 'INTERVIEW' ? 'bg-indigo-100 text-indigo-800 border border-indigo-300' :
-                          log.role_action === 'REVIEW_CV' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                          ['REVIEW_CV', 'ACCESS_ADDED', 'ACCESS_UPDATED', 'ACCESS_ROLE_CHANGED', 'PERSONNEL_ADDED', 'PERSONNEL_UPDATED'].includes(log.role_action) ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
                           'bg-slate-100 text-slate-700 border border-slate-300'
                         }`}>
-                          {log.role_action}
+                          {ACTION_LABELS[log.role_action] || 'Aktivitas sistem'}
                         </span>
                       </td>
                       <td className="p-3 text-slate-600 max-w-md leading-relaxed">

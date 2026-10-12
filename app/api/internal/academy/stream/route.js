@@ -47,6 +47,9 @@ export async function GET(request) {
           event: '*', schema: 'public', table: 'academy_attendance', filter: `batch_id=eq.${batch.id}`,
         }, () => send('attendance_changed'))
         .on('postgres_changes', {
+          event: '*', schema: 'public', table: 'candidates', filter: `batch_id=eq.${batch.id}`,
+        }, () => send('attendance_changed'))
+        .on('postgres_changes', {
           event: '*', schema: 'public', table: 'academy_pic_groups', filter: `batch_id=eq.${batch.id}`,
         }, () => send('attendance_changed'))
         .on('postgres_changes', {

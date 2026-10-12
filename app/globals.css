@@ -132,10 +132,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #6e9877
 .rejected-template-badge { padding: 4px 7px; border: 1px solid #f0cfcc; border-radius: 999px; color: #a54842; background: #fff0ee; font-size: 8px; font-weight: 800; letter-spacing: .4px; white-space: nowrap; }
 .accepted-template-badge { padding: 4px 7px; border: 1px solid #cde5c8; border-radius: 999px; color: #3d7546; background: #eef8eb; font-size: 8px; font-weight: 800; letter-spacing: .4px; white-space: nowrap; }
 .accepted-interview-details { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin: 10px 0; }
-.accepted-interview-details label { display: block; }
-.accepted-interview-details label > span { display: block; margin-bottom: 4px; color: #526257; font-size: 8px; font-weight: 700; }
-.accepted-interview-details input { width: 100%; min-height: 32px; padding: 6px 8px; border: 1px solid #dfe6dd; border-radius: 5px; outline: none; color: #34443a; background: #fff; font-size: 9px; }
-.accepted-interview-details input:focus { border-color: #9bb394; box-shadow: 0 0 0 2px #a9c49c26; }
+.accepted-interview-details > div { display: grid; gap: 4px; min-width: 0; padding: 8px 10px; border: 1px solid #dfe6dd; border-radius: 6px; background: #fff; }
+.accepted-interview-details > div > span { color: #526257; font-size: 11px; font-weight: 700; }
+.accepted-interview-details > div > strong { color: #34443a; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
 .accepted-interview-location { grid-column: 1 / -1; }
 .academy-template-card { margin-top: 18px; padding: 13px; border: 1px solid #e3ebe1; border-radius: 7px; background: linear-gradient(180deg,#fbfdfb,#f6f9f5); }
 .academy-template-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
@@ -267,12 +266,16 @@ html[data-theme="dark"] .staff-content .placement-candidate, html[data-theme="da
 html[data-theme="dark"] .staff-content .placement-candidate strong, html[data-theme="dark"] .staff-content .placement-option strong, html[data-theme="dark"] .staff-content .pending-template-heading h3 { color: #e4ece5; }
 html[data-theme="dark"] .staff-content .pending-template-card, html[data-theme="dark"] .staff-content .academy-template-card { color: #dce6de; background: #17221b; border-color: #35443a; }
 html[data-theme="dark"] .staff-content .pending-template-card input, html[data-theme="dark"] .staff-content .pending-template-card textarea, html[data-theme="dark"] .staff-content .academy-template-card input, html[data-theme="dark"] .staff-content .academy-template-card textarea { color: #e4ece5; background: #111914; border-color: #46564a; }
-html[data-theme="dark"] .staff-content [class*="bg-blue-100"], html[data-theme="dark"] .staff-content [class*="bg-blue-50"], html[data-theme="dark"] .staff-content [class*="bg-indigo-100"] { color: #b9d9c0 !important; background: #243b2c !important; border-color: #47634e !important; }
-html[data-theme="dark"] .staff-content [class*="bg-emerald-100"], html[data-theme="dark"] .staff-content [class*="bg-emerald-50"] { color: #b9d9c0 !important; background: #243b2c !important; border-color: #47634e !important; }
-html[data-theme="dark"] .staff-content [class*="bg-amber-100"], html[data-theme="dark"] .staff-content [class*="bg-amber-50"] { color: #e7d39b !important; background: #3a3322 !important; border-color: #645332 !important; }
-html[data-theme="dark"] .staff-content [class*="bg-rose-100"], html[data-theme="dark"] .staff-content [class*="bg-rose-50"] { color: #e6b3aa !important; background: #3b2928 !important; border-color: #67413e !important; }
+html[data-theme="dark"] .staff-content [class*="bg-blue-100"], html[data-theme="dark"] .staff-content [class*="bg-blue-50"] { color: #c6e4cc !important; background: #1f3828 !important; border-color: #42694c !important; }
+html[data-theme="dark"] .staff-content [class*="border-blue-"] { border-color: #42694c !important; }
+html[data-theme="dark"] .staff-content [class*="bg-indigo-100"], html[data-theme="dark"] .staff-content [class*="bg-indigo-50"] { color: #ded4ff !important; background: #30294b !important; border-color: #55487d !important; }
+html[data-theme="dark"] .staff-content [class*="bg-emerald-100"], html[data-theme="dark"] .staff-content [class*="bg-emerald-50"] { color: #b9edc7 !important; background: #1e3b2c !important; border-color: #396b4d !important; }
+html[data-theme="dark"] .staff-content [class*="bg-amber-100"], html[data-theme="dark"] .staff-content [class*="bg-amber-50"] { color: #f5dfa2 !important; background: #40351f !important; border-color: #715c2d !important; }
+html[data-theme="dark"] .staff-content [class*="bg-rose-100"], html[data-theme="dark"] .staff-content [class*="bg-rose-50"] { color: #ffc1b9 !important; background: #452725 !important; border-color: #783f3b !important; }
 html[data-theme="dark"] .staff-content [class*="bg-slate-100"], html[data-theme="dark"] .staff-content [class*="bg-slate-50"], html[data-theme="dark"] .staff-content [class*="bg-gray-100"], html[data-theme="dark"] .staff-content [class*="bg-gray-50"] { color: #c5d2c8 !important; background: #202e25 !important; border-color: #35443a !important; }
-html[data-theme="dark"] .staff-content [class*="text-blue-700"], html[data-theme="dark"] .staff-content [class*="text-blue-800"], html[data-theme="dark"] .staff-content [class*="text-indigo-800"] { color: #b9d9c0 !important; }
+html[data-theme="dark"] .staff-content [class*="text-blue-700"] { color: #a7d5ae !important; }
+html[data-theme="dark"] .staff-content [class*="text-blue-800"] { color: #c6e4cc !important; }
+html[data-theme="dark"] .staff-content [class*="text-indigo-800"] { color: #ded4ff !important; }
 html[data-theme="dark"] .staff-content .placement-page .placement-candidate.selected { color: #e4ece5 !important; background: #254532 !important; border: 1px solid #52715d !important; box-shadow: inset 2px 0 #a7d5ae; }
 html[data-theme="dark"] .staff-content .placement-page .placement-candidate.selected strong { color: #f3f4f6 !important; }
 html[data-theme="dark"] .staff-content .placement-page .placement-candidate em.placed { color: #b9d9c0; background: #243b2c; border-color: #47634e; }
@@ -595,3 +598,446 @@ html[data-theme="dark"] .staff-topbar .staff-batch-switcher:hover { color: #f0f5
 @keyframes staff-login-spin { to { transform: rotate(360deg); } }
 @keyframes staff-role-toast-in { from { opacity: 0; transform: translate3d(16px,-8px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
 @media (max-width: 520px) { .staff-role-toast { top: 12px; right: 12px; width: calc(100vw - 24px); padding: 13px; } }
+
+/* Portal readability pass: keep compact labels legible across every staff module. */
+.staff-content :where(small, .text-xs, [class*="text-[10px]"], [class*="text-[11px]"]) { font-size: 12px !important; line-height: 1.45; }
+.staff-content table { font-size: 12px !important; }
+.staff-content thead th { padding-top: 11px; padding-bottom: 11px; color: #526257 !important; font-size: 12px !important; line-height: 1.35; letter-spacing: .35px; }
+.staff-content tbody td { line-height: 1.45; }
+.staff-content input, .staff-content select, .staff-content textarea,
+.staff-content input::placeholder, .staff-content textarea::placeholder { font-size: 13px !important; }
+.staff-content input::placeholder, .staff-content textarea::placeholder { color: #78867c; opacity: 1; }
+.staff-content .grid.grid-cols-5 > div > div:first-child { font-size: 11px !important; line-height: 1.35; letter-spacing: .45px; }
+.staff-content .staff-section-label, .staff-content .staff-panel-heading p,
+.staff-content .placement-page .staff-section-label { font-size: 12px !important; line-height: 1.45; }
+.staff-content .staff-admin-pill, .staff-content .pending-template-badge,
+.staff-content .rejected-template-badge, .staff-content .accepted-template-badge,
+.staff-content .academy-passed-badge, .staff-content .mdt-status-badge,
+.staff-content .placement-candidate em { min-height: 25px; padding: 4px 9px; font-size: 12px !important; line-height: 1.3; white-space: normal; text-align: center; }
+.staff-content .placement-candidate small, .staff-content .placement-option small,
+.staff-content .placement-note, .staff-content .placement-reference,
+.staff-content .candidate-staff-info > div { font-size: 12px !important; color: #68776d; line-height: 1.45; }
+.staff-content .placement-candidate { gap: 10px; padding: 11px 12px; }
+.staff-content .placement-filter { min-height: 36px; padding: 6px 8px; font-size: 12px !important; }
+.staff-content .placement-filter span { font-size: 12px !important; }
+.staff-content :where(.staff-topbar p, .staff-panel-title p, .placement-page .placement-header p,
+  .placement-page .placement-list-heading p, .placement-placeholder p, .staff-notice,
+  .candidate-field-hint, .candidate-required-note) { font-size: 12px !important; color: #68776d; line-height: 1.5; }
+.staff-sidebar .staff-nav-link { min-height: 42px; font-size: 12px !important; }
+.staff-sidebar .nav-caption, .staff-sidebar .nav-admin-tag, .staff-brand small { font-size: 10px; }
+.staff-topbar .staff-breadcrumb, .staff-topbar .staff-live { font-size: 10px; }
+
+/* Candidate-facing form follows the same readable type scale. */
+.candidate-brand small, .candidate-kicker, .candidate-field-hint,
+.candidate-required-note, .candidate-footer { font-size: 11px; }
+.candidate-staff-link, .candidate-form label, .candidate-form input,
+.candidate-form select, .candidate-submit, .candidate-alert { font-size: 13px; }
+.candidate-form-heading p { font-size: 13px; color: #637168; }
+.candidate-form input::placeholder, .candidate-form textarea::placeholder { color: #707d73; opacity: 1; font-size: 13px; }
+.candidate-form-wrap { padding: 34px 36px 30px; }
+.candidate-form label { margin-top: 17px; }
+.candidate-field-hint, .candidate-required-note { color: #68776d; line-height: 1.5; }
+
+@media (max-width: 900px) {
+  .staff-content .grid.grid-cols-5 { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+}
+@media (max-width: 560px) {
+  .staff-content .grid.grid-cols-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .staff-content .grid.grid-cols-5 > div { min-height: 84px; padding: 12px !important; }
+  .staff-content .grid.grid-cols-5 > div > div:first-child { font-size: 10px !important; }
+  .staff-content thead th { padding: 9px 10px; font-size: 12px !important; }
+  .candidate-form-wrap { padding: 25px 20px 22px; }
+}
+/* Cover arbitrary compact text utilities used directly in JSX throughout modules. */
+.staff-content [class*="text-[7px]"], .staff-content [class*="text-[8px]"],
+.staff-content [class*="text-[9px]"], .staff-content [class*="text-[10px]"],
+.staff-content [class*="text-[11px]"] { font-size: 12px !important; line-height: 1.45; }
+
+/* Complete the type scale on standalone routes and the internal sign-in view. */
+.pin-generator-page { font-size: 16px; }
+.pin-generator-page :where(p, label, button, input, small) { line-height: 1.5; }
+.pin-generator-page :where(.text-xs, [class*="text-[10px]"], [class*="text-[11px]"]) { font-size: 13px !important; }
+.pin-generator-page input::placeholder { color: #68776d; opacity: 1; font-size: 14px; }
+.pin-generator-page > div > section { padding: clamp(22px, 5vw, 32px); }
+.staff-login-card :where(.text-xs, [class*="text-[10px]"], [class*="text-[11px]"], small) { font-size: 13px !important; line-height: 1.45; }
+.staff-login-card input::placeholder, .staff-login-card textarea::placeholder { font-size: 14px !important; opacity: 1; }
+.staff-login-card { gap: 16px; }
+.staff-login-card :where(label, legend) { margin-bottom: 6px; }
+.candidate-footer { color: #68776d; letter-spacing: .6px; }
+.candidate-brand small { color: #68776d; }
+.candidate-kicker { color: #496b52; letter-spacing: 1px; }
+@media (max-width: 560px) {
+  .pin-generator-page { padding: 20px 14px; }
+  .pin-generator-page > div > section { padding: 22px 18px; }
+  .pin-generator-page .font-mono.text-5xl { font-size: clamp(2rem, 10vw, 3rem); letter-spacing: .15em; }
+  .staff-login-card { gap: 13px; }
+}
+
+/* Placement page uses dedicated selectors, so give it its own readable scale. */
+.staff-content .placement-page .placement-header { padding: 18px 20px; gap: 16px; }
+.staff-content .placement-page .placement-header h2 { font-size: 20px; line-height: 1.25; }
+.staff-content .placement-page .placement-header p,
+.staff-content .placement-page .placement-list-heading p,
+.staff-content .placement-page .placement-placeholder p,
+.staff-content .placement-page .placement-note,
+.staff-content .placement-page .placement-reference,
+.staff-content .placement-page .placement-empty,
+.staff-content .placement-page .staff-notice { font-size: 13px !important; line-height: 1.5; color: #5f6f64; }
+.staff-content .placement-page .staff-section-label { font-size: 11px !important; letter-spacing: .8px; }
+.staff-content .placement-page .staff-admin-pill { min-height: 28px; padding: 5px 10px; font-size: 12px !important; }
+
+.staff-content .placement-page .placement-candidates { padding: 16px; }
+.staff-content .placement-page .placement-list-heading { margin-bottom: 12px; }
+.staff-content .placement-page .placement-list-heading h3 { font-size: 15px; line-height: 1.35; }
+.staff-content .placement-page .placement-filters { gap: 4px; margin-bottom: 10px; padding: 4px; }
+.staff-content .placement-page .placement-filter { min-height: 40px; padding: 6px 8px; font-size: 13px !important; line-height: 1.25; }
+.staff-content .placement-page .placement-filter span { font-size: 12px !important; }
+.staff-content .placement-page .placement-search { min-height: 42px; padding-left: 32px; font-size: 14px !important; }
+.staff-content .placement-page .placement-list { max-height: 455px; gap: 6px; }
+.staff-content .placement-page .placement-candidate { min-height: 56px; padding: 8px 10px; gap: 10px; }
+.staff-content .placement-page .placement-candidate strong { font-size: 13px !important; line-height: 1.35; }
+.staff-content .placement-page .placement-candidate small { margin-top: 4px; color: #68776d; font-size: 13px !important; line-height: 1.4; }
+.staff-content .placement-page .placement-candidate em { flex: 0 0 auto; width: min(128px, 36%); max-width: none; min-height: 30px; padding: 5px 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px !important; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
+.staff-content .placement-page .placement-editor { min-height: 0; padding: clamp(20px, 2vw, 28px); }
+.staff-content .placement-page .placement-editor h2 { margin: 6px 0 16px; font-size: 22px; line-height: 1.25; }
+.staff-content .placement-page .placement-reference { min-height: 48px; padding: 11px 13px; gap: 14px; }
+.staff-content .placement-page .placement-reference strong { text-align: right; }
+.staff-content .placement-page .placement-options { margin: 18px 0 16px; }
+.staff-content .placement-page .placement-options legend { margin-bottom: 9px; font-size: 13px !important; }
+.staff-content .placement-page .placement-option { min-height: 64px; margin: 7px 0; padding: 10px 12px; gap: 11px; }
+.staff-content .placement-page .placement-option img { width: 36px; height: 36px; }
+.staff-content .placement-page .placement-option strong { font-size: 13px !important; }
+.staff-content .placement-page .placement-option small { margin-top: 4px; color: #68776d; font-size: 14px !important; line-height: 1.4; }
+.staff-content .placement-page .placement-save { min-height: 44px; padding: 10px 14px; font-size: 14px !important; font-weight: 700; line-height: 1.35; }
+.staff-content .placement-page .academy-template-card { margin-top: 20px; padding: 18px; }
+.staff-content .placement-page .academy-template-kicker { font-size: 11px !important; letter-spacing: .8px; }
+.staff-content .placement-page .academy-template-heading h3 { font-size: 16px; }
+.staff-content .placement-page .academy-template-heading p,
+.staff-content .placement-page .academy-template-actions > span,
+.staff-content .placement-page .academy-template-unavailable { font-size: 13px !important; line-height: 1.5; color: #5f6f64; }
+.staff-content .placement-page .academy-passed-badge { min-height: 30px; padding: 5px 11px; font-size: 13px !important; }
+.staff-content .placement-page .academy-details-grid { gap: 12px; }
+.staff-content .placement-page .academy-details-grid label > span,
+.staff-content .placement-page .academy-preview-label { margin-bottom: 6px; font-size: 12px !important; line-height: 1.4; }
+.staff-content .placement-page .academy-details-grid input { min-height: 42px; padding: 9px 11px; font-size: 14px !important; }
+.staff-content .placement-page .academy-details-grid input::placeholder { color: #68776d; opacity: 1; }
+.staff-content .placement-page .academy-bbcode-preview { min-height: 240px; padding: 12px; font-size: 13px !important; line-height: 1.55; }
+.staff-content .placement-page .academy-template-actions { gap: 12px; margin-top: 12px; }
+.staff-content .placement-page .academy-template-actions button { min-height: 40px; padding: 0 14px; font-size: 13px !important; }
+@media (max-width: 800px) {
+  .staff-content .placement-page .placement-layout { grid-template-columns: minmax(0, 1fr); }
+  .staff-content .placement-page .placement-list { max-height: 310px; }
+}
+@media (max-width: 520px) {
+  .staff-content .placement-page .placement-header { padding: 15px; }
+  .staff-content .placement-page .placement-candidates { padding: 13px; }
+  .staff-content .placement-page .placement-filter { padding: 6px 4px; font-size: 12px !important; }
+  .staff-content .placement-page .placement-candidate em { width: min(112px, 38%); font-size: 12px !important; }
+  .staff-content .placement-page .placement-editor { padding: 16px; }
+  .staff-content .placement-page .academy-template-card { padding: 14px; }
+  .staff-content .placement-page .academy-template-heading { gap: 8px; }
+  .staff-content .placement-page .academy-template-actions { align-items: stretch; flex-direction: column; }
+  .staff-content .placement-page .academy-template-actions button { width: 100%; }
+}
+
+
+/* Sidebar: preserve the full navigation and pin session controls at the bottom. */
+.staff-sidebar { overflow: visible; }
+.staff-sidebar > div:first-child { display: flex !important; flex: 0 0 auto; flex-direction: column; gap: 11px; overflow: visible; }
+.staff-sidebar > div:first-child > :not([hidden]) ~ :not([hidden]) { margin-top: 0; }
+.staff-sidebar .staff-brand { margin-bottom: 0; }
+.staff-sidebar > div:last-child { flex: 0 0 auto; margin: auto 3px 0; padding: 11px 7px 3px !important; }
+.staff-sidebar > div:last-child button { min-height: 40px; font-size: 13px; }
+.staff-sidebar > div:last-child .text-xs { font-size: 13px !important; }
+.staff-sidebar > div:last-child [class*="text-[9px]"] { font-size: 11px !important; }
+.staff-sidebar .nav-caption { font-size: 11px; letter-spacing: 1.1px; }
+.staff-sidebar .nav-admin-tag { font-size: 10px; }
+.staff-topbar .staff-breadcrumb { font-size: 11px; }
+.staff-topbar p { font-size: 13px; line-height: 1.4; }
+
+/* Bring dense module copy up to a consistent minimum without changing page structure. */
+.staff-content .pending-template-heading p,
+.staff-content .pending-template-actions > span,
+.staff-content .academy-template-heading p,
+.staff-content .academy-template-actions > span,
+.staff-content .academy-template-unavailable,
+.staff-content .accepted-interview-details > div > span,
+.staff-content .academy-details-grid label > span,
+.staff-content .academy-preview-label,
+.staff-content .pending-reason-option span,
+.staff-content .pending-custom-reason-label,
+.staff-content .pending-bbcode-label { font-size: 12px !important; line-height: 1.45; }
+.staff-content .pending-template-badge,
+.staff-content .rejected-template-badge,
+.staff-content .accepted-template-badge,
+.staff-content .academy-passed-badge { min-height: 26px; padding: 4px 8px; font-size: 12px !important; line-height: 1.3; white-space: normal; }
+.staff-content .academy-template-heading h3,
+.staff-content .pending-template-heading h3 { font-size: 14px; line-height: 1.35; }
+.staff-content .academy-details-grid input,
+.staff-content .pending-template-card textarea { min-height: 38px; padding: 8px 10px; font-size: 13px !important; }
+.staff-content .academy-bbcode-preview,
+.staff-content .pending-template-card .pending-bbcode-preview { font-size: 12px !important; line-height: 1.5; }
+.staff-content .academy-template-actions button,
+.staff-content .pending-template-actions button { min-height: 36px; font-size: 12px !important; }
+.staff-content .management-filter-tab { font-size: 12px !important; }
+.staff-content .management-page .management-filter-tab { font-size: 12px !important; }
+.staff-content .staff-live, .staff-content .staff-new-candidate { font-size: 12px; }
+@media (max-height: 760px) and (min-width: 801px) {
+  .staff-sidebar { padding-top: 12px !important; padding-bottom: 10px !important; }
+  .staff-sidebar > div:first-child { gap: 7px; }
+  .staff-sidebar .staff-brand { min-height: 46px; padding-bottom: 8px; }
+  .staff-sidebar .staff-nav-link { min-height: 35px; }
+  .staff-sidebar nav { gap: 2px !important; }
+  .staff-sidebar > div:last-child { padding-top: 8px !important; }
+  .staff-sidebar > div:last-child button { min-height: 36px; }
+}
+/* Final type hierarchy and small-label audit across the shared portal shell. */
+.staff-content h3 { font-size: 14px; line-height: 1.35; }
+.staff-content .grid.grid-cols-5 > div > div:first-child,
+.staff-content .grid.grid-cols-5 > div > small { font-size: 12px !important; }
+.staff-content .academy-template-kicker,
+.staff-content .pending-template-kicker { font-size: 12px !important; }
+.staff-content .placement-page .placement-header h2 { font-size: 18px; }
+.staff-content .placement-page .placement-editor h2 { font-size: 20px; }
+.staff-content .placement-page .placement-option small { font-size: 13px !important; }
+.staff-content .placement-page .placement-save { font-size: 13px !important; }
+.staff-content .placement-page .academy-template-heading h3 { font-size: 15px; }
+.staff-content .placement-page .academy-details-grid input { font-size: 13px !important; }
+.staff-top-actions .staff-live { font-size: 11px; }
+.staff-top-actions .staff-new-candidate { font-size: 12px; }
+.staff-topbar .staff-breadcrumb { font-size: 11px; }
+.staff-brand small { font-size: 11px; }
+.staff-sidebar .nav-admin-tag { font-size: 11px; }
+.candidate-footer, .candidate-required-note { font-size: 12px; }
+.candidate-kicker { font-size: 12px; }
+
+/* Department identity chips: subtle, distinct, and shared across candidate views. */
+.department-badge { display: inline-flex; max-width: 100%; align-items: center; border: 1px solid; border-radius: 9999px; padding: 3px 9px; font-size: 11px; font-weight: 700; line-height: 1.25; white-space: nowrap; }
+.department-badge-lssd { color: #8a5429; background: #fbf1e7; border-color: #e8cfb5; }
+.department-badge-lspd { color: #3c6283; background: #edf5fb; border-color: #c9dceb; }
+.department-badge-doc { color: #376345; background: #edf5ee; border-color: #c9ddcc; }
+.department-badge-unset { color: #5b6670; background: #f1f3f4; border-color: #d9dfe2; }
+
+html[data-theme="dark"] .staff-content .candidate-detail-modal { color: #edf4ef !important; background: #17251c !important; border-color: #42594a !important; }
+html[data-theme="dark"] .staff-content .candidate-detail-modal #candidate-detail-title { color: #f4f8f5 !important; }
+html[data-theme="dark"] .staff-content .candidate-detail-modal h3 { color: #dce9df !important; }
+html[data-theme="dark"] .staff-content .candidate-detail-field { color: #edf4ef !important; background: #26382c !important; border-color: #405847 !important; }
+html[data-theme="dark"] .staff-content .candidate-detail-field > div:first-child { color: #c5d7ca !important; }
+html[data-theme="dark"] .staff-content .candidate-detail-field > div:last-child { color: #f0f5f1 !important; }
+html[data-theme="dark"] .staff-content .candidate-detail-status { color: #edf4ef !important; background: #202f25 !important; border-color: #405847 !important; }
+html[data-theme="dark"] .staff-content .candidate-detail-status > div:first-child { color: #c5d7ca !important; }
+html[data-theme="dark"] .department-badge-lssd { color: #f1c394 !important; background: #3b2d20 !important; border-color: #765534 !important; }
+html[data-theme="dark"] .department-badge-lspd { color: #c0dcf2 !important; background: #243747 !important; border-color: #49657d !important; }
+html[data-theme="dark"] .department-badge-doc { color: #c4e0c9 !important; background: #24382b !important; border-color: #49664f !important; }
+html[data-theme="dark"] .department-badge-unset { color: #d1dad4 !important; background: #29332d !important; border-color: #4b5b50 !important; }
+html[data-theme="dark"] .staff-content .review-page .review-candidate-list button[class~="bg-emerald-50/80"] { color: #f3f7f4 !important; background: #1b3324 !important; border-color: #72c985 !important; box-shadow: inset 0 0 0 1px #72c98555, 0 0 0 2px #72c98522 !important; }
+html[data-theme="dark"] .staff-content .review-page a.bg-emerald-600 { color: #fff !important; background: #276443 !important; border-color: #43835c !important; }
+html[data-theme="dark"] .staff-content .review-page button.bg-emerald-700 { color: #fff !important; background: #245b3b !important; border-color: #43835c !important; }
+html[data-theme="dark"] .staff-content .review-page a.bg-emerald-600:hover,
+html[data-theme="dark"] .staff-content .review-page button.bg-emerald-700:hover { background: #32734e !important; }
+
+/* High contrast status pills use semantic colors in both themes. */
+.detail-status-pill { display: inline-flex; max-width: 100%; align-items: center; border: 1px solid; border-radius: 9999px; padding: 2px 8px; font-size: 11px; font-weight: 750; line-height: 1.35; }
+.detail-status-pill-green { color: #17633a; background: #e8f5eb; border-color: #b9ddc3; }
+.detail-status-pill-red { color: #a3312d; background: #fff0ee; border-color: #efc2bd; }
+.detail-status-pill-amber { color: #795200; background: #fff5dc; border-color: #ead59b; }
+.detail-status-pill-indigo { color: #493982; background: #f0edff; border-color: #d2c9fa; }
+.detail-status-pill-slate { color: #45535c; background: #eef1f2; border-color: #d4dce0; }
+html[data-theme="dark"] .detail-status-pill-green { color: #b9edc7 !important; background: #173b29 !important; border-color: #36704d !important; }
+html[data-theme="dark"] .detail-status-pill-red { color: #ffc1b9 !important; background: #482522 !important; border-color: #7c403b !important; }
+html[data-theme="dark"] .detail-status-pill-amber { color: #f5dfa2 !important; background: #40351f !important; border-color: #715c2d !important; }
+html[data-theme="dark"] .detail-status-pill-indigo { color: #ded4ff !important; background: #30294b !important; border-color: #55487d !important; }
+html[data-theme="dark"] .detail-status-pill-slate { color: #d5e1d9 !important; background: #293630 !important; border-color: #4b6153 !important; }
+html[data-theme="dark"] .staff-content input::placeholder,
+html[data-theme="dark"] .staff-content textarea::placeholder,
+html[data-theme="dark"] .staff-content select:invalid { color: #b7c5bb !important; opacity: 1 !important; }
+
+/* Site-wide readable type floor. Compact text utilities are normalized across
+   every staff module; spacing remains owned by each component. */
+.staff-content,
+.candidate-page { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+.staff-content :where(.text-xs,[class*="text-[7px]"],[class*="text-[8px]"],[class*="text-[9px]"],[class*="text-[10px]"],[class*="text-[11px]"],[class*="text-[12px]"]) { font-size: 13px !important; line-height: 1.4; }
+.staff-content table { font-size: 13px !important; }
+.staff-content thead th { font-size: 13px !important; line-height: 1.35; letter-spacing: .35px; }
+.staff-content tbody td { line-height: 1.45; }
+.staff-content input,
+.staff-content select,
+.staff-content textarea { font-size: 14px !important; }
+.staff-content input::placeholder,
+.staff-content textarea::placeholder { font-size: 13px !important; }
+.staff-content button { line-height: 1.35; }
+.staff-content button.text-xs,
+.staff-content button[class*="text-[7px]"],
+.staff-content button[class*="text-[8px]"],
+.staff-content button[class*="text-[9px]"],
+.staff-content button[class*="text-[10px]"],
+.staff-content button[class*="text-[11px]"],
+.staff-content button[class*="text-[12px]"] { min-height: 34px; }
+.staff-sidebar .staff-nav-link { min-height: 39px; font-size: 13px !important; }
+.staff-sidebar .nav-caption,
+.staff-brand small,
+.staff-topbar .staff-breadcrumb { font-size: 12px !important; line-height: 1.35; }
+.staff-sidebar .nav-admin-tag,
+.staff-top-actions .staff-live { font-size: 12px !important; }
+.staff-sidebar > div:last-child button { min-height: 40px; font-size: 13px !important; }
+.department-badge,
+.detail-status-pill { min-height: 24px; padding: 3px 9px; font-size: 12px !important; line-height: 1.3; }
+.candidate-brand small,
+.candidate-form-heading p,
+.candidate-form label,
+.candidate-form input,
+.candidate-form select,
+.candidate-form input::placeholder,
+.candidate-field-hint,
+.candidate-alert,
+.candidate-submit,
+.candidate-footer,
+.candidate-required-note,
+.candidate-kicker,
+.candidate-staff-link { font-size: 13px !important; line-height: 1.45; }
+.candidate-form-heading p { color: #647369; }
+.candidate-field-hint,
+.candidate-footer,
+.candidate-required-note { color: #647369; }
+.candidate-form input::placeholder { color: #68776d; opacity: 1; }
+@media (max-height: 760px) and (min-width: 801px) {
+  .staff-sidebar .staff-nav-link { min-height: 36px; }
+}
+.staff-content .interview-page .academy-template-card { margin-top: 2px; padding: 16px; }
+.staff-content .interview-page .academy-template-heading h3 { font-size: 16px; }
+.staff-content .interview-page .academy-template-heading p,
+.staff-content .interview-page .academy-template-actions > span,
+.staff-content .interview-page .academy-template-unavailable { color: #5f6f64; font-size: 13px !important; line-height: 1.5; }
+.staff-content .interview-page .academy-passed-badge { flex: 0 0 auto; min-height: 28px; padding: 5px 10px; font-size: 12px !important; }
+.staff-content .interview-page .academy-passed-badge.is-unavailable { color: #765c24; background: #fbf5e7; border-color: #ead9a9; }
+.staff-content .interview-page .academy-details-grid { gap: 10px; }
+.staff-content .interview-page .academy-details-grid label > span,
+.staff-content .interview-page .academy-preview-label { color: #405246; font-size: 13px !important; }
+.staff-content .interview-page .academy-details-grid input { min-height: 40px; font-size: 14px !important; }
+.staff-content .interview-page .academy-schedule-grid { gap: 8px; }
+.staff-content .interview-page .academy-schedule-item { min-width: 0; padding: 9px 11px; border: 1px solid #dfe7df; border-radius: 7px; background: #fff; }
+.staff-content .interview-page .academy-schedule-item > span,
+.staff-content .interview-page .academy-schedule-item > strong { display: block; }
+.staff-content .interview-page .academy-schedule-item > span { margin-bottom: 4px; color: #66766b; font-size: 12px; }
+.staff-content .interview-page .academy-schedule-item > strong { overflow-wrap: anywhere; color: #304438; font-size: 13px; line-height: 1.4; }
+.staff-content .interview-page .academy-bbcode-preview { min-height: 210px; font-size: 13px !important; line-height: 1.5; }
+.staff-content .interview-page .academy-template-actions { align-items: center; gap: 12px; }
+.staff-content .interview-page .academy-template-actions button { min-height: 38px; padding: 0 13px; font-size: 13px !important; }
+html[data-theme="dark"] .staff-content .interview-page .academy-template-card { color: #edf4ef; background: #17251c; border-color: #42594a; }
+html[data-theme="dark"] .staff-content .interview-page .academy-template-heading h3 { color: #f0f6f1; }
+html[data-theme="dark"] .staff-content .interview-page .academy-template-heading p,
+html[data-theme="dark"] .staff-content .interview-page .academy-template-actions > span,
+html[data-theme="dark"] .staff-content .interview-page .academy-template-unavailable,
+html[data-theme="dark"] .staff-content .interview-page .academy-details-grid label > span,
+html[data-theme="dark"] .staff-content .interview-page .academy-preview-label { color: #c5d4c9; }
+html[data-theme="dark"] .staff-content .interview-page .academy-passed-badge.is-unavailable { color: #f2dfa8; background: #40351f; border-color: #715c2d; }
+html[data-theme="dark"] .staff-content .interview-page .academy-schedule-item { background: #26382c; border-color: #405847; }
+html[data-theme="dark"] .staff-content .interview-page .academy-schedule-item > span { color: #b8c9bd; }
+html[data-theme="dark"] .staff-content .interview-page .academy-schedule-item > strong { color: #edf4ef; }
+@media (max-width: 520px) {
+  .staff-content .interview-page .academy-template-card { padding: 13px; }
+  .staff-content .interview-page .academy-template-actions { align-items: stretch; flex-direction: column; }
+  .staff-content .interview-page .academy-template-actions button { width: 100%; }
+}
+.staff-content .interview-queue-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; padding: 4px; border: 1px solid #e2e9e1; border-radius: 9px; background: #f6f8f5; }
+.staff-content .interview-queue-tabs button { min-width: 0; min-height: 40px; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; color: #56675a; background: transparent; font-size: 12px; font-weight: 700; line-height: 1.25; }
+.staff-content .interview-queue-tabs button span { display: inline-flex; min-width: 22px; justify-content: center; margin-left: 3px; padding: 2px 5px; border-radius: 999px; color: inherit; background: #e8eee8; font-size: 11px; }
+.staff-content .interview-queue-tabs button.active { color: #1e3a2b; background: #fff; border-color: #d9e4d8; box-shadow: 0 1px 3px #20332612; }
+.staff-content .interview-queue-status { display: inline-flex; flex: 0 0 auto; align-items: center; border: 1px solid; border-radius: 999px; padding: 3px 7px; font-size: 11px; font-weight: 700; line-height: 1.25; }
+.staff-content .interview-queue-status.ready { color: #425d78; background: #edf4fa; border-color: #cbdce9; }
+.staff-content .interview-queue-status.passed { color: #28623d; background: #eaf5ec; border-color: #c3dfc8; }
+.staff-content .interview-queue-status.pending { color: #795b1c; background: #fbf5e7; border-color: #ead9a9; }
+.staff-content .interview-queue-status.failed { color: #8b3834; background: #fbefee; border-color: #ebc8c4; }
+.interview-success-overlay { position: fixed; inset: 0; z-index: 140; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(8 17 11 / 68%); }
+.interview-success-modal { width: min(100%,760px); max-height: 94vh; overflow: auto; padding: 22px; border: 1px solid #dce6dc; border-radius: 16px; color: #26392d; background: #fff; box-shadow: 0 24px 80px #07130b55; }
+.interview-success-heading { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+.interview-success-heading > div { min-width: 0; flex: 1; }
+.interview-success-icon { width: 36px; height: 36px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #187344; font-size: 21px; font-weight: 800; }
+.interview-success-heading h2 { margin: 1px 0 3px; color: #1d3526; font-size: 19px; line-height: 1.3; }
+.interview-success-heading p { margin: 0; color: #647369; font-size: 13px; line-height: 1.45; }
+.interview-success-close { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid #dce5dc; border-radius: 8px; color: #526257; background: #f7f9f6; font-size: 22px; line-height: 1; }
+.interview-success-modal .academy-preview-label { display: block; margin-bottom: 6px; color: #405246; font-size: 13px; font-weight: 700; }
+.interview-success-modal .interview-success-preview { min-height: 270px; max-height: 52vh; }
+.interview-success-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 12px; }
+.interview-success-actions > span { color: #5f6f64; font-size: 13px; line-height: 1.4; }
+.interview-success-copy { min-height: 46px; flex: 0 0 auto; padding: 0 19px; border: 1px solid #12633d; border-radius: 9px; color: #fff; background: #16804e; box-shadow: 0 4px 12px #12633d2b; font-size: 14px; font-weight: 800; }
+.interview-success-copy:hover { background: #11683f; }
+.interview-success-copy:disabled { cursor: not-allowed; opacity: .55; }
+html[data-theme="dark"] .staff-content .interview-queue-tabs { background: #17221b; border-color: #35443a; }
+html[data-theme="dark"] .staff-content .interview-queue-tabs button { color: #c1cec4; }
+html[data-theme="dark"] .staff-content .interview-queue-tabs button.active { color: #f0f6f1; background: #26382c; border-color: #405847; }
+html[data-theme="dark"] .staff-content .interview-queue-tabs button span { background: #35483a; }
+html[data-theme="dark"] .staff-content .interview-queue-status.ready { color: #c6e4cc; background: #26382c; border-color: #49664f; }
+html[data-theme="dark"] .staff-content .interview-queue-status.passed { color: #b9edc7; background: #173b29; border-color: #36704d; }
+html[data-theme="dark"] .staff-content .interview-queue-status.pending { color: #f5dfa2; background: #40351f; border-color: #715c2d; }
+html[data-theme="dark"] .staff-content .interview-queue-status.failed { color: #ffc1b9; background: #482522; border-color: #7c403b; }
+html[data-theme="dark"] .interview-success-modal { color: #edf4ef; background: #17251c; border-color: #42594a; }
+html[data-theme="dark"] .interview-success-heading h2 { color: #f0f6f1; }
+html[data-theme="dark"] .interview-success-heading p,
+html[data-theme="dark"] .interview-success-actions > span { color: #c5d4c9; }
+html[data-theme="dark"] .interview-success-close { color: #dce9df; background: #26382c; border-color: #405847; }
+html[data-theme="dark"] .interview-success-modal .academy-preview-label { color: #c5d4c9; }
+@media (max-width: 520px) {
+  .staff-content .interview-queue-tabs button { padding: 6px 4px; font-size: 11px; }
+  .interview-success-modal { padding: 16px; border-radius: 12px; }
+  .interview-success-heading h2 { font-size: 17px; }
+  .interview-success-actions { align-items: stretch; flex-direction: column; }
+  .interview-success-copy { width: 100%; }
+}
+.staff-content .review-mode-tabs { max-width: 100%; flex-wrap: wrap; justify-content: flex-end; }
+.staff-content .review-mode-tabs button { white-space: nowrap; }
+.review-success-modal .pending-bbcode-preview { width: 100%; min-height: 270px; max-height: 52vh; padding: 12px; border: 1px solid #dfe6dd; border-radius: 7px; color: #33483a; background: #f5f8f4; font: 12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; white-space: pre; overflow: auto; resize: vertical; }
+html[data-theme="dark"] .review-success-modal .pending-bbcode-preview { color: #e5eee7; background: #111914; border-color: #46564a; }
+.dashboard-page .dashboard-candidate-table { width: 100%; min-width: 0; table-layout: fixed; }
+.dashboard-page .dashboard-candidate-table th,
+.dashboard-page .dashboard-candidate-table td { padding: 7px 6px; text-align: center; vertical-align: middle; overflow-wrap: anywhere; }
+.dashboard-page .dashboard-candidate-table thead tr { height: 48px; }
+.dashboard-page .dashboard-candidate-table th { white-space: normal; line-height: 1.25; }
+.dashboard-page .dashboard-candidate-table .dashboard-candidate-row { height: 56px; }
+.dashboard-page .dashboard-candidate-table .dashboard-candidate-row > td > button { width: 100%; text-align: center; overflow-wrap: anywhere; }
+.dashboard-page .dashboard-candidate-table .dashboard-candidate-row > td > span { max-width: 100%; justify-content: center; white-space: normal; }
+.dashboard-page .dashboard-candidate-table .mdt-status-badge { min-width: 0; }
+.dashboard-page .dashboard-candidate-table th:nth-child(1) { width: 16%; }
+.dashboard-page .dashboard-candidate-table th:nth-child(2) { width: 7%; }
+.dashboard-page .dashboard-candidate-table th:nth-child(3) { width: 13%; }
+.dashboard-page .dashboard-candidate-table th:nth-child(4) { width: 8%; }
+.dashboard-page .dashboard-candidate-table th:nth-child(5) { width: 9%; }
+.dashboard-page .dashboard-candidate-table th:nth-child(6) { width: 12%; }
+.dashboard-page .dashboard-candidate-table th:nth-child(7) { width: 13%; }
+.dashboard-page .dashboard-candidate-table th:nth-child(8) { width: 22%; }
+
+/* Dark mode: keep selection, schedule details, and Review controls on-theme. */
+html[data-theme="dark"] .staff-content .interview-page button[class~="bg-blue-50/80"] {
+  color: #f3f7f4 !important;
+  background: #1b3324 !important;
+  border-color: #72c985 !important;
+  box-shadow: inset 0 0 0 1px #72c98555, 0 0 0 2px #72c98522 !important;
+}
+html[data-theme="dark"] .staff-content .interview-page button[class~="bg-blue-50/80"] :where(span,div) { color: #e6f1e8 !important; }
+html[data-theme="dark"] .staff-content .interview-page .academy-template-unavailable { color: #d0ddd3; background: #26382c; border-color: #405847; }
+html[data-theme="dark"] .staff-content .review-page .accepted-interview-details > div {
+  color: #edf4ef !important;
+  background: #26382c !important;
+  border-color: #405847 !important;
+}
+html[data-theme="dark"] .staff-content .review-page .accepted-interview-details > div > span { color: #b8c9bd !important; }
+html[data-theme="dark"] .staff-content .review-page .accepted-interview-details > div > strong { color: #edf4ef !important; }
+html[data-theme="dark"] .staff-content .review-page input:focus,
+html[data-theme="dark"] .staff-content .review-page select:focus,
+html[data-theme="dark"] .staff-content .review-page textarea:focus,
+html[data-theme="dark"] .staff-content .interview-page input:focus,
+html[data-theme="dark"] .staff-content .interview-page select:focus,
+html[data-theme="dark"] .staff-content .interview-page textarea:focus {
+  border-color: #72c985 !important;
+  box-shadow: 0 0 0 2px #72c9852b !important;
+  outline-color: #72c985 !important;
+}
+html[data-theme="dark"] .staff-content .review-page option,
+html[data-theme="dark"] .staff-content .interview-page option { color: #e4ece5; background: #17221b; }
+@media (max-width: 800px) {
+  .staff-content .review-page > .flex.justify-between.items-center { align-items: stretch; flex-direction: column; gap: 12px; }
+  .staff-content .review-mode-tabs { justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; }
+}
+@media (max-width: 520px) {
+  .staff-content .review-mode-tabs button { padding: 7px 9px; }
+}

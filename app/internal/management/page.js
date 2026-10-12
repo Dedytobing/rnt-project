@@ -4,13 +4,6 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import { BatchContext } from '../BatchContext';
 import { parseWhitelistRoster } from '@/lib/whitelist-parser';
 
-function attendanceLabel(status) {
-  if (status === 'PRESENT') return 'Hadir';
-  if (status === 'ABSENT') return 'Tidak hadir';
-  if (status === 'EXCUSED') return 'Izin';
-  return 'Belum dicatat';
-}
-
 function TablePagination({ page, total, onPageChange }) {
   const pageCount = Math.max(1, Math.ceil(total / 10));
   return <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3 text-xs">
@@ -59,7 +52,7 @@ function RoleFilterHeader({ value, onChange }) {
 export default function RecruitmentManagementPage() {
   const { selectedBatch } = useContext(BatchContext);
   const selectedBatchId = selectedBatch?.id;
-  const [data, setData] = useState({ personnel: [], whitelist: [], candidates: [], attendance: [], groups: [], groupMembers: [], candidateGroups: [] });
+  const [data, setData] = useState({ personnel: [], whitelist: [], candidates: [], groups: [], groupMembers: [], candidateGroups: [] });
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [targetGroupId, setTargetGroupId] = useState('');
   const [groupEditorOpen, setGroupEditorOpen] = useState(false);
@@ -72,6 +65,7 @@ export default function RecruitmentManagementPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkDepartment, setBulkDepartment] = useState('LSPD');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [activeModule, setActiveModule] = useState('groups');
@@ -138,7 +132,7 @@ export default function RecruitmentManagementPage() {
   const searchedCandidates = useMemo(() => moduleCandidates.filter((candidate) => candidate.nama.toLocaleLowerCase('id-ID').includes(candidateSearch.trim().toLocaleLowerCase('id-ID'))), [moduleCandidates, candidateSearch]);
   const currentCandidatePage = Math.min(candidatePage, Math.max(1, Math.ceil(searchedCandidates.length / 10)));
   const visibleCandidatesPage = useMemo(() => searchedCandidates.slice((currentCandidatePage - 1) * 10, currentCandidatePage * 10), [searchedCandidates, currentCandidatePage]);
-  const attendanceByCandidate = useMemo(() => new Map(data.attendance.map((row) => [String(row.candidate_id), row])), [data.attendance]);
+  const departmentForCandidate = useCallback((candidate) => ['LSPD', 'LSSD', 'DOC'].includes(String(candidate.mapping_dept || '').toUpperCase()) ? String(candidate.mapping_dept).toUpperCase() : '', []);
   const membersByGroup = useMemo(() => {
     const grouped = new Map();
     for (const member of data.groupMembers) {
@@ -162,29 +156,17 @@ export default function RecruitmentManagementPage() {
   const normalizedSearch = search.trim().toLowerCase();
   const visibleCandidates = useMemo(() => candidates
     .filter((candidate) => candidate.nama.toLowerCase().includes(normalizedSearch))
-    .filter((candidate) => {
-      const hasGroup = Boolean(candidateGroupByCandidate.get(String(candidate.id)));
-      return candidateFilter === 'ALL' || (candidateFilter === 'ASSIGNED' ? hasGroup : !hasGroup);
-    })
-    .sort((left, right) => {
-      const leftAssigned = Boolean(candidateGroupByCandidate.get(String(left.id)));
-      const rightAssigned = Boolean(candidateGroupByCandidate.get(String(right.id)));
-      return Number(leftAssigned) - Number(rightAssigned) || left.nama.localeCompare(right.nama, 'id');
-    }), [candidates, normalizedSearch, candidateFilter, candidateGroupByCandidate]);
-  const selectedVisibleCount = visibleCandidates.filter((candidate) => selectedCandidateIds.includes(String(candidate.id))).length;
-  const allVisibleSelected = visibleCandidates.length > 0 && selectedVisibleCount === visibleCandidates.length;
-  const targetGroup = data.groups.find((group) => group.id === targetGroupId) || null;
-  const targetGroupMembers = targetGroup ? membersByGroup.get(targetGroup.id) || [] : [];
+    .filter((candidate) => candidateFilter === 'ALL' || (candidateFilter.startsWith('DEPT:') && departmentForCandidate(candidate) === candidateFilter.slice(5)))
+    .sort((left, right) => left.nama.localeCompare(right.nama, 'id')), [candidates, normalizedSearch, candidateFilter, departmentForCandidate]);
   const renderCandidate = (candidate) => {
     const key = String(candidate.id);
-    const currentGroupId = candidateGroupByCandidate.get(key) || '';
-    const currentGroup = data.groups.find((group) => group.id === currentGroupId);
-    const highlighted = Boolean(selectedGroupId && currentGroupId === selectedGroupId);
-    return <label key={key} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition ${highlighted ? 'border-emerald-300 bg-emerald-50/70 ring-1 ring-emerald-200' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}>
-      <input type="checkbox" checked={selectedCandidateIds.includes(key)} onChange={() => toggleCandidate(key)} className="h-4 w-4 shrink-0 accent-[#1E3A2B]" />
-      <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-slate-800">{candidate.nama}</strong><small className="management-attendance-status mt-0.5 block text-[11px] text-slate-500">Absensi Academy: {attendanceLabel(attendanceByCandidate.get(key)?.attendance_status)}</small></span>
-      <span className={`management-candidate-group-badge max-w-[45%] truncate rounded-full px-2.5 py-1 text-[10px] font-bold sm:text-xs ${currentGroup ? highlighted ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{currentGroup?.name || 'Belum Ada PIC'}</span>
-    </label>;
+    const department = departmentForCandidate(candidate);
+    const departmentLabel = department || 'Belum Ditentukan';
+    return <article key={key} className="flex min-h-12 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:border-slate-300 hover:bg-slate-50">
+      <input type="checkbox" aria-label={`Pilih ${candidate.nama}`} checked={selectedCandidateIds.includes(key)} onChange={() => toggleCandidate(key)} className="h-4 w-4 shrink-0 accent-[#1E3A2B]" />
+      <strong className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800" title={candidate.nama}>{candidate.nama}</strong>
+      <span className={`shrink-0 department-badge ${department === 'LSSD' ? 'department-badge-lssd' : department === 'LSPD' ? 'department-badge-lspd' : department === 'DOC' ? 'department-badge-doc' : 'department-badge-unset'}`}>{departmentLabel}</span>
+    </article>;
   };
 
   const openNewGroup = () => {
@@ -266,15 +248,8 @@ export default function RecruitmentManagementPage() {
     setSelectedCandidateIds((current) => current.includes(key) ? current.filter((id) => id !== key) : [...current, key]);
   };
 
-  const toggleVisibleCandidates = (checked) => {
-    const visibleIds = visibleCandidates.map((candidate) => String(candidate.id));
-    setSelectedCandidateIds((current) => checked
-      ? [...new Set([...current, ...visibleIds])]
-      : current.filter((id) => !visibleIds.includes(id)));
-  };
-
   const assignSelectedCandidates = async () => {
-    if (!selectedBatchId || !selectedCandidateIds.length || !targetGroupId) return;
+    if (!selectedBatchId || !selectedCandidateIds.length) return;
     setBulkSaving(true);
     setError('');
     setMessage('');
@@ -282,11 +257,11 @@ export default function RecruitmentManagementPage() {
       const response = await fetch('/api/internal/management', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'SET_CANDIDATE_GROUPS_BULK', candidateIds: selectedCandidateIds, batchId: selectedBatchId, groupId: targetGroupId }),
+        body: JSON.stringify({ action: 'SET_CANDIDATE_DEPARTMENTS_BULK', candidateIds: selectedCandidateIds, batchId: selectedBatchId, department: bulkDepartment }),
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Pemindahan kandidat gagal disimpan.');
-      setMessage(`${result.updatedCount || selectedCandidateIds.length} kandidat ditetapkan ke ${targetGroup?.name || 'kelompok terpilih'}.`);
+      setMessage(`${result.updatedCount || selectedCandidateIds.length} kandidat ditetapkan ke ${bulkDepartment || 'Belum Ditentukan'}.`);
       setSelectedCandidateIds([]);
       await refresh();
     } catch (issue) {
@@ -384,15 +359,15 @@ export default function RecruitmentManagementPage() {
     finally { setSaving(false); }
   };
 
-  if (!selectedBatch) return <section className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm"><h2 className="text-lg font-bold text-slate-900">Pilih batch terlebih dahulu</h2><p className="mt-2 text-sm text-slate-500">Manajemen kelompok PIC dikelola per batch.</p></section>;
+  if (!selectedBatch) return <section className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm"><h2 className="text-lg font-bold text-slate-900">Pilih batch terlebih dahulu</h2><p className="mt-2 text-sm text-slate-500">Pengelompokan Academy dikelola per batch.</p></section>;
 
   return <div className="management-page space-y-5 pb-24">
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="management-eyebrow text-xs font-bold uppercase tracking-[0.16em] text-[#1E3A2B]">Manajemen Kelompok PIC Academy</p><h2 className="mt-1 text-2xl font-bold text-slate-900">{selectedBatch.name}</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Kelola personel per kelompok di sebelah kiri. Pilih kandidat di panel kanan dan tetapkan beberapa kandidat ke satu kelompok dalam satu aksi.</p></div><span className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-[#1E3A2B]">{candidates.length} kandidat · {activePersonnel.length} personel aktif</span></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="management-eyebrow text-xs font-bold uppercase tracking-[0.16em] text-[#1E3A2B]">Pengelompokan Academy per Departemen</p><h2 className="mt-1 text-2xl font-bold text-slate-900">{selectedBatch.name}</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Kandidat dikelompokkan berdasarkan departemen final atau preferensi. Admin dapat mengubah kelompok secara manual pada setiap kartu.</p></div><span className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-[#1E3A2B]">{candidates.length} kandidat · {activePersonnel.length} personel aktif</span></div>
     </section>
     <section aria-label="Sub-menu manajemen" className="grid gap-3 sm:grid-cols-3">
       {[
-        ['groups', 'Kelompok PIC', `${data.groups.length} kelompok`, 'Atur personel dan assignment kandidat'],
+        ['groups', 'Departemen Academy', `${['LSPD', 'LSSD', 'DOC'].filter((department) => candidates.some((candidate) => departmentForCandidate(candidate) === department)).length} departemen`, 'Kelompok otomatis atau manual'],
         ['candidates', 'Data Kandidat', `${data.candidates.length} data`, 'Edit, hapus, dan pulihkan kandidat'],
         ['personnel', 'Akses Staff', `${activePersonnel.length} personel aktif`, 'Kelola identitas, PIN, dan peran'],
       ].map(([key, title, count, description]) => <button key={key} type="button" aria-pressed={activeModule === key} onClick={() => { setActiveModule(key); setError(''); setMessage(''); }} className={`management-module-card rounded-2xl border-2 p-4 text-left shadow-sm transition ${activeModule === key ? 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-100' : 'border-slate-200 bg-white hover:border-emerald-300'}`}><span className="flex items-center justify-between gap-2"><strong className="text-sm font-bold text-slate-900">{title}</strong>{activeModule === key && <span className="rounded-full bg-emerald-700 px-2 py-1 text-[10px] font-bold text-white">Aktif</span>}</span><span className="mt-2 block text-xs font-semibold text-[#1E3A2B]">{count}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span></button>)}
@@ -402,43 +377,19 @@ export default function RecruitmentManagementPage() {
     {activeModule === 'groups' && <div className="grid items-start gap-4 xl:grid-cols-[minmax(300px,0.85fr)_minmax(0,1.5fr)]">
       <section className="space-y-3 xl:sticky xl:top-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Panel Kelompok</p><h3 className="mt-1 text-lg font-bold text-slate-900">Kelompok PIC</h3></div><button type="button" onClick={openNewGroup} className="rounded-lg bg-[#1E3A2B] px-3 py-2 text-xs font-bold text-white hover:bg-[#294d39]">+ Kelompok</button></div>
-          <p className="mt-1 text-xs leading-5 text-slate-500">Pilih kartu untuk menyorot anggotanya di daftar kandidat.</p>
-          <div className="mt-4 space-y-2">
-            {data.groups.map((group) => {
-              const memberIds = membersByGroup.get(group.id) || [];
-              const selected = group.id === selectedGroupId;
-              return <article key={group.id} className={`rounded-xl border p-3 transition ${selected ? 'border-[#1E3A2B] bg-emerald-50/60 ring-1 ring-[#1E3A2B]/10' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                <button type="button" onClick={() => { setSelectedGroupId(group.id); setTargetGroupId(group.id); setGroupEditorOpen(false); setMessage(''); }} className="w-full text-left">
-                  <div className="flex items-start justify-between gap-2"><strong className="min-w-0 truncate text-sm text-slate-800">{group.name}</strong><span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">{candidateCountByGroup.get(group.id) || 0} kandidat</span></div>
-                  <div className="mt-2 flex flex-wrap gap-1">{memberIds.length ? memberIds.map((id) => <span key={id} className="management-pic-member-pill rounded-full bg-white/80 px-2 py-0.5 text-[10px] text-slate-600 ring-1 ring-slate-200">{personnelById.get(id)?.full_name || 'Personel tidak aktif'}</span>) : <span className="text-[11px] italic text-amber-700">Belum ada anggota</span>}</div>
-                </button>
-                <button type="button" onClick={() => openGroupEditor(group)} className="management-edit-members mt-1 rounded-md px-2 py-1 text-xs font-medium text-[#1E3A2B] hover:bg-white hover:underline">Edit anggota</button>
-              </article>;
-            })}
-            {!data.groups.length && !loading && <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">Belum ada kelompok PIC di batch ini.</div>}
-          </div>
+          <div className="flex items-center justify-between gap-3"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Filter Kandidat</p><h3 className="mt-1 text-lg font-bold text-slate-900">Departemen</h3></div><span className="text-xs text-slate-500">{visibleCandidates.length} tampil</span></div>
+          <div className="mt-3 grid grid-cols-2 gap-2">{['LSPD', 'LSSD', 'DOC', 'UNSET'].map((department) => { const label = department === 'UNSET' ? 'Belum ditentukan' : department; const count = candidates.filter((candidate) => departmentForCandidate(candidate) === (department === 'UNSET' ? '' : department)).length; const filterValue = `DEPT:${department === 'UNSET' ? '' : department}`; const selected = candidateFilter === filterValue; return <button key={department} type="button" aria-pressed={selected} onClick={() => setCandidateFilter(selected ? 'ALL' : filterValue)} className={`flex min-h-16 flex-col items-start justify-between rounded-xl border p-3 text-left transition ${selected ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200' : 'border-slate-200 bg-white hover:border-emerald-300'}`}><strong className="text-sm text-slate-800">{label}</strong><span className="text-xs font-semibold text-slate-500">{count} kandidat</span></button>; })}</div>
 
         </div>
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Panel Kandidat</p><h3 className="mt-1 text-lg font-bold text-slate-900">Semua kandidat · {candidates.length}</h3><p className="mt-1 text-xs text-slate-500">{selectedGroup ? `Kandidat dalam ${selectedGroup.name} disorot.` : 'Pilih kelompok di kiri untuk menyorot kandidatnya.'}</p></div><label className="w-full sm:max-w-xs"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari kandidat</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ketik nama kandidat…" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-2" aria-label="Filter kandidat">
-              {[['ALL', 'Semua', candidates.length], ['UNASSIGNED', 'Belum Ada PIC', candidates.filter((candidate) => !candidateGroupByCandidate.get(String(candidate.id))).length], ['ASSIGNED', 'Sudah Ada PIC', candidates.filter((candidate) => candidateGroupByCandidate.get(String(candidate.id))).length]].map(([value, label, count]) => <button key={value} type="button" aria-pressed={candidateFilter === value} onClick={() => setCandidateFilter(value)} className={`management-filter-tab inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${candidateFilter === value ? 'border-[#1E3A2B] bg-[#1E3A2B] text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-[#1E3A2B] hover:text-[#1E3A2B]'}`}><span>{label}</span><span className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${candidateFilter === value ? 'bg-white/15 text-emerald-100' : 'bg-slate-100 text-slate-500'}`}>{count}</span></button>)}
-            </div>
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={allVisibleSelected} onChange={(event) => toggleVisibleCandidates(event.target.checked)} className="h-4 w-4 accent-[#1E3A2B]" />Pilih semua ({visibleCandidates.length})</label>
-          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Panel Kandidat</p><h3 className="mt-1 text-lg font-bold text-slate-900">Kandidat · {candidates.length}</h3><p className="mt-1 text-xs text-slate-500">Pilih departemen setiap kandidat; Absensi mengikuti data ini.</p></div><label className="w-full sm:max-w-xs"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari kandidat</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ketik nama kandidat…" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>
+          {selectedCandidateIds.length > 0 && <div className="mt-4 flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 sm:flex-row sm:items-center sm:justify-between"><span className="text-sm font-semibold text-emerald-900">{selectedCandidateIds.length} kandidat dipilih</span><div className="flex flex-wrap items-center gap-2"><label className="sr-only" htmlFor="bulk-candidate-department">Departemen untuk kandidat terpilih</label><select id="bulk-candidate-department" value={bulkDepartment} onChange={(event) => setBulkDepartment(event.target.value)} className="min-w-44 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm"><option value="">Belum Ditentukan</option><option value="LSPD">LSPD</option><option value="LSSD">LSSD</option><option value="DOC">DOC</option></select><button type="button" disabled={bulkSaving || loading} onClick={assignSelectedCandidates} className="rounded-lg bg-[#1E3A2B] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{bulkSaving ? 'Menyimpan…' : 'Tetapkan Departemen Terpilih'}</button><button type="button" onClick={() => setSelectedCandidateIds([])} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Batal pilih</button></div></div>}
         </div>
         {loading ? <div className="p-14 text-center text-sm text-slate-500">Memuat seluruh kandidat batch…</div> : <div className="space-y-2 p-3 sm:p-4">
-          {visibleCandidates.length ? <>
-            {candidateFilter !== 'ASSIGNED' && visibleCandidates.some((candidate) => !candidateGroupByCandidate.get(String(candidate.id))) && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">Belum Ada PIC <span className="font-medium text-amber-700">· {visibleCandidates.filter((candidate) => !candidateGroupByCandidate.get(String(candidate.id))).length} kandidat</span></div>}
-            {visibleCandidates.filter((candidate) => !candidateGroupByCandidate.get(String(candidate.id))).map((candidate) => renderCandidate(candidate))}
-            {candidateFilter === 'ALL' && visibleCandidates.some((candidate) => candidateGroupByCandidate.get(String(candidate.id))) && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900">Sudah Ada PIC <span className="font-medium text-emerald-700">· {visibleCandidates.filter((candidate) => candidateGroupByCandidate.get(String(candidate.id))).length} kandidat</span></div>}
-            {visibleCandidates.filter((candidate) => candidateGroupByCandidate.get(String(candidate.id))).map((candidate) => renderCandidate(candidate))}
-          </> : <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">Tidak ada kandidat yang cocok dengan filter.</div>}
+          {visibleCandidates.length ? visibleCandidates.map((candidate) => renderCandidate(candidate)) : <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">Tidak ada kandidat yang cocok dengan filter.</div>}
         </div>}
       </section>
     </div>}
@@ -454,11 +405,6 @@ export default function RecruitmentManagementPage() {
       {loading ? <p className="p-10 text-center text-sm text-slate-500">Memuat daftar personel…</p> : searchedPersonnel.length ? <><div className="overflow-x-auto"><table className="w-full min-w-[800px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Nama</th><th className="px-4 py-3">Pangkat / Posisi</th><th className="px-4 py-3">Departemen</th><th className="relative w-[120px] min-w-[120px] max-w-[120px] whitespace-nowrap px-4 py-3"><RoleFilterHeader value={personnelRoleFilter} onChange={(role) => { setPersonnelRoleFilter(role); setPersonnelPage(1); }} /></th><th className="px-4 py-3">Akses</th><th className="px-4 py-3">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{visiblePersonnelPage.map((person) => <tr key={person.id} className={!person.is_active ? 'bg-slate-50 text-slate-400' : ''}><td className="px-4 py-3 font-semibold">{person.full_name}</td><td className="px-4 py-3">{person.rank || '—'}{person.position ? ` · ${person.position}` : ''}</td><td className="px-4 py-3">{person.department || '—'}</td><td className="px-4 py-3">{person.role === 'ADMIN' ? 'Admin' : 'Staff'}</td><td className="px-4 py-3">{person.is_active ? 'Aktif' : 'Dinonaktifkan'}</td><td className="px-4 py-3"><div className="flex gap-2"><button type="button" onClick={() => setEditingPersonnel({ personnelId: person.id, fullName: person.full_name, role: person.role, rank: person.rank || '', position: person.position || '', department: person.department || 'LSPD' })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Edit</button>{person.is_active && <button type="button" disabled={saving} onClick={() => deletePersonnel(person)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Hapus akses</button>}</div></td></tr>)}</tbody></table></div><TablePagination page={currentPersonnelPage} total={searchedPersonnel.length} onPageChange={setPersonnelPage} /></> : <p className="p-10 text-center text-sm text-slate-500">{personnelSearch ? 'Tidak ada personel yang cocok dengan pencarian.' : 'Belum ada personel terdaftar.'}</p>}
       {pendingWhitelist.length > 0 && <div className="border-t border-slate-100 p-4"><div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><h4 className="text-sm font-bold text-slate-800">Whitelist menunggu login · {pendingWhitelist.length}</h4><p className="mt-1 text-xs text-slate-500">Profil pangkat, posisi, dan departemen diisi staff saat login pertama.</p></div><label className="block w-full max-w-sm"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari nama whitelist</span><input type="search" value={whitelistSearch} onChange={(event) => { setWhitelistSearch(event.target.value); setWhitelistPage(1); }} placeholder="Ketik nama…" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>{searchedWhitelist.length ? <><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Nama lengkap</th><th className="relative w-[120px] min-w-[120px] max-w-[120px] whitespace-nowrap px-3 py-2"><RoleFilterHeader value={whitelistRoleFilter} onChange={(role) => { setWhitelistRoleFilter(role); setWhitelistPage(1); }} /></th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{visibleWhitelistPage.map((item) => <tr key={item.id}><td className="px-3 py-2 font-medium text-slate-700">{item.full_name}</td><td className="px-3 py-2">{editingWhitelist?.id === item.id ? <select aria-label={`Peran untuk ${item.full_name}`} value={editingWhitelist.role} onChange={(event) => setEditingWhitelist({ ...editingWhitelist, role: event.target.value })} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select> : item.role === 'ADMIN' ? 'Admin' : 'Staff'}</td><td className="px-3 py-2 text-amber-700">Menunggu login</td><td className="px-3 py-2"><div className="flex flex-wrap gap-2">{editingWhitelist?.id === item.id ? <><button type="button" disabled={saving} onClick={saveWhitelistRole} className="rounded-lg bg-[#1E3A2B] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">Simpan</button><button type="button" disabled={saving} onClick={() => setEditingWhitelist(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-50">Batal</button></> : <><button type="button" onClick={() => setEditingWhitelist({ id: item.id, role: item.role })} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button><button type="button" disabled={saving} onClick={() => deleteWhitelist(item)} className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Hapus</button></>}</div></td></tr>)}</tbody></table></div><TablePagination page={currentWhitelistPage} total={searchedWhitelist.length} onPageChange={setWhitelistPage} /></> : <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Tidak ada nama whitelist yang cocok dengan pencarian.</p>}</div>}
     </section>}
-
-    {selectedCandidateIds.length > 0 && <div className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-3xl flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur sm:inset-x-auto sm:bottom-6 sm:w-[min(90vw,760px)] sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3">
-      <div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#1E3A2B] text-sm font-bold text-white">{selectedCandidateIds.length}</span><span><strong className="block text-sm text-slate-900">Kandidat dipilih</strong><small className="text-xs text-slate-500">Tetapkan seluruh pilihan ke satu kelompok</small></span></div>
-      <div className="flex gap-2"><select value={targetGroupId} onChange={(event) => setTargetGroupId(event.target.value)} aria-label="Kelompok tujuan" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-[#1E3A2B] sm:max-w-64">{data.groups.map((group) => <option key={group.id} value={group.id} disabled={!(membersByGroup.get(group.id) || []).length}>{group.name}{!(membersByGroup.get(group.id) || []).length ? ' · belum ada anggota' : ''}</option>)}</select><button type="button" disabled={bulkSaving || !targetGroup || !targetGroupMembers.length} onClick={assignSelectedCandidates} className="shrink-0 rounded-lg bg-[#1E3A2B] px-3 py-2 text-xs font-bold text-white hover:bg-[#294d39] disabled:cursor-not-allowed disabled:opacity-50">{bulkSaving ? 'Memindahkan…' : 'Tetapkan ke Kelompok PIC'}</button><button type="button" onClick={() => setSelectedCandidateIds([])} aria-label="Batalkan pilihan" className="rounded-lg px-2 py-2 text-slate-500 hover:bg-slate-100">×</button></div>
-    </div>}
 
     {editingCandidate && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm"><form onSubmit={saveCandidate} className="my-auto w-full max-w-lg space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div><p className="text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Data Kandidat</p><h3 className="mt-1 text-xl font-bold text-slate-900">Edit kandidat</h3></div><label className="block"><span className="mb-1 block text-sm font-semibold text-slate-700">Nama lengkap</span><input required minLength={2} maxLength={100} value={editingCandidate.nama || ''} onChange={(event) => setEditingCandidate({ ...editingCandidate, nama: event.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#1E3A2B]" /></label><label className="block"><span className="mb-1 block text-sm font-semibold text-slate-700">Tautan Thread CV</span><input required type="url" maxLength={2048} inputMode="url" placeholder="https://forum.example/thread/..." value={editingCandidate.link_cv || ''} onChange={(event) => setEditingCandidate({ ...editingCandidate, link_cv: event.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#1E3A2B]" /><small className="mt-1 block text-xs text-slate-500">Masukkan tautan thread forum yang dapat dibuka oleh tim rekrutmen.</small></label><div className="grid gap-3 sm:grid-cols-2"><label className="block"><span className="mb-1 block text-sm font-semibold text-slate-700">Status CV</span><select value={editingCandidate.status_cv || 'Pending'} onChange={(event) => setEditingCandidate({ ...editingCandidate, status_cv: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"><option>Pending</option><option>Interview</option><option>Accepted</option><option>Rejected</option></select></label><label className="block"><span className="mb-1 block text-sm font-semibold text-slate-700">Status wawancara</span><select value={editingCandidate.status_interview || 'Pending'} onChange={(event) => setEditingCandidate({ ...editingCandidate, status_interview: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"><option>Pending</option><option>Passed</option><option>Failed</option></select></label><label className="block sm:col-span-2"><span className="mb-1 block text-sm font-semibold text-slate-700">Pemeriksaan MDT</span><select value={editingCandidate.mdt_check || ''} onChange={(event) => setEditingCandidate({ ...editingCandidate, mdt_check: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"><option value="">Belum diperiksa</option><option>Green</option><option>Yellow</option><option>Red</option></select></label></div><footer className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" disabled={saving} onClick={() => setEditingCandidate(null)} className="rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-600">Batal</button><button type="submit" disabled={saving} className="rounded-lg bg-[#1E3A2B] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? 'Menyimpan…' : 'Simpan perubahan'}</button></footer></form></div>}
 
@@ -481,7 +427,7 @@ export default function RecruitmentManagementPage() {
       <footer className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">{bulkWhitelistPreview && !editingPersonnel.personnelId && personnelModalTab === 'bulk' && <button type="button" disabled={saving} onClick={() => { setBulkWhitelistPreview(null); setError(''); }} className="mr-auto rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-600">Kembali Edit</button>}<button type="button" disabled={saving} onClick={() => { setEditingPersonnel(null); setBulkWhitelistPreview(null); }} className="rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-600">Batal</button><button type="button" disabled={saving} onClick={bulkWhitelistPreview && !editingPersonnel.personnelId && personnelModalTab === 'bulk' ? saveBulkWhitelist : personnelModalTab === 'bulk' && !editingPersonnel.personnelId ? previewBulkWhitelist : savePersonnel} className="rounded-lg bg-[#1E3A2B] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? 'Menyimpan…' : personnelModalTab === 'bulk' && !editingPersonnel.personnelId ? bulkWhitelistPreview ? `Simpan ${bulkWhitelistPreview.rows.length} Data Whitelist` : 'Lihat Pratinjau' : editingPersonnel.personnelId ? 'Simpan profil' : 'Tambah ke whitelist'}</button></footer>
     </form></div>}
 
-    {groupEditorOpen && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setGroupEditorOpen(false); }}>
+    {false && groupEditorOpen && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setGroupEditorOpen(false); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="pic-group-modal-title" className="my-auto flex max-h-[min(90vh,800px)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <header className="border-b border-slate-100 px-5 py-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Manajemen Kelompok PIC</p><h3 id="pic-group-modal-title" className="mt-1 text-xl font-bold text-slate-900">{editingGroupId ? 'Edit kelompok' : 'Tambah kelompok'}</h3></div><button type="button" disabled={saving} onClick={() => setGroupEditorOpen(false)} aria-label="Tutup modal" className="rounded-lg px-2.5 py-1.5 text-xl leading-none text-slate-500 hover:bg-slate-100 disabled:opacity-50">×</button></div></header>
         <div className="space-y-4 overflow-y-auto p-5">

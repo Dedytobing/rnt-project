@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { hasInternalPinConfig, verifyInternalPin } from '@/lib/internal-pin';
 import {
+  browserSessionCookieOptions,
   createInternalSessionToken,
+  createRememberedPinToken,
   getInternalSession,
   hasSessionSecret,
   INTERNAL_SESSION_COOKIE,
+  readRememberedPinToken,
+  REMEMBERED_PIN_COOKIE,
   sessionCookieOptions,
 } from '@/lib/internal-session';
 import { enforceRateLimit, rateLimitResponse } from '@/lib/rate-limit';
@@ -20,7 +24,14 @@ async function recordLoginFailure({ request, name, role, personnelId = null }) {
   try {
     const db = createServiceRoleClient();
     const ipHash = createHmac('sha256', process.env.INTERNAL_SESSION_SECRET || '').update(requestIp(request)).digest('hex');
-    await db.from('personnel_audit_logs').insert({ personnel_id: personnelId, personnel_name: name, role, event: 'LOGIN_FAILURE', ip_hash: ipHash });
+    await db.from('personnel_audit_logs').insert({
+      personnel_id: personnelId,
+      personnel_name: name,
+      role,
+      event: 'LOGIN_FAILURE',
+      action_details: `Login gagal untuk peran ${role === 'ADMIN' ? 'Admin' : 'Staff'}.`,
+      ip_hash: ipHash,
+    });
   } catch (error) {
     console.error('Personnel login failure audit failed:', error);
   }
@@ -39,17 +50,63 @@ function isSameOrigin(request) {
 }
 
 export async function GET(request) {
-  const session = getInternalSession(request);
-  return noStore(session
-    ? {
-      authenticated: true,
-      officerName: session.name,
-      userRole: session.role,
-      officerRank: session.rank,
-      officerPosition: session.position,
-      officerDepartment: session.department,
+  const currentSession = getInternalSession(request);
+  const remembered = readRememberedPinToken(request);
+  let profile = currentSession || null;
+  let expiresAt = currentSession?.expiresAt || remembered?.expiresAt;
+  try {
+    if (!profile && remembered) {
+      const db = createServiceRoleClient();
+      const { data: personnel, error: personnelError } = await db.from('rnt_personnel')
+        .select('id,full_name,normalized_name,role,rank,position,department,is_active')
+        .eq('id', remembered.personnelId).eq('is_active', true).maybeSingle();
+      if (personnelError) throw personnelError;
+      let access = null;
+      if (personnel && personnel.role === remembered.role) {
+        const { data, error } = await db.from('rnt_personnel_name_whitelist')
+          .select('id').eq('normalized_name', personnel.normalized_name)
+          .eq('role', remembered.role).eq('is_active', true).maybeSingle();
+        if (error) throw error;
+        access = data;
+      }
+      if (access && personnel?.rank && ['LSPD', 'LSSD'].includes(personnel.department)) {
+        profile = {
+          name: personnel.full_name,
+          role: personnel.role,
+          rank: personnel.rank,
+          position: personnel.position || '',
+          department: personnel.department,
+          personnelId: personnel.id,
+        };
+      }
     }
-    : { authenticated: false });
+    const pinVerified = Boolean(profile && expiresAt > Math.floor(Date.now() / 1000));
+    const response = noStore(pinVerified ? {
+      authenticated: false,
+      pinVerified: true,
+      officerName: profile.name,
+      userRole: profile.role,
+      officerRank: profile.rank,
+      officerPosition: profile.position || '',
+      officerDepartment: profile.department,
+      expiresAt,
+    } : { authenticated: false, pinVerified: false });
+    // A page reload always returns to the lock screen; only the explicit login action creates a portal session.
+    response.cookies.set(INTERNAL_SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
+    if (pinVerified && (!remembered || remembered.personnelId !== profile.personnelId || remembered.role !== profile.role)) {
+      response.cookies.set(REMEMBERED_PIN_COOKIE, createRememberedPinToken({
+        personnelId: profile.personnelId,
+        role: profile.role,
+        expiresAt,
+      }), sessionCookieOptions(expiresAt - Math.floor(Date.now() / 1000)));
+    } else if (!pinVerified && request.cookies?.get(REMEMBERED_PIN_COOKIE)?.value) {
+      response.cookies.set(REMEMBERED_PIN_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
+    }
+    return response;
+  } catch (error) {
+    console.error('Remembered personnel profile verification failed:', error);
+    return noStore({ authenticated: false, pinVerified: false, error: 'Sesi tersimpan belum dapat diverifikasi.' }, 503);
+  }
 }
 
 export async function POST(request) {
@@ -120,11 +177,16 @@ export async function POST(request) {
     await recordLoginFailure({ request, name: personnel.full_name, role, personnelId: personnel.id });
     return noStore({ success: false, error: 'Profil personel tidak sesuai dengan whitelist. Hubungi Admin RNT.' }, 401);
   }
-  if (!verifyInternalPin(parsed.data.pin, role, Date.now(), pinIdentity)) {
+  const rememberedPin = readRememberedPinToken(request);
+  const resumesVerifiedSession = Boolean(!parsed.data.pin && rememberedPin
+    && personnel?.id === rememberedPin.personnelId
+    && role === rememberedPin.role);
+  if (!resumesVerifiedSession && !verifyInternalPin(parsed.data.pin, role, Date.now(), pinIdentity)) {
     await recordLoginFailure({ request, name: personnel?.full_name || whitelistedName.full_name, role, personnelId: personnel?.id || null });
     return noStore({ success: false, error: 'PIN akses tidak valid atau sudah kedaluwarsa.' }, 401);
   }
 
+  let personnelCreated = false;
   if (!personnel) {
     try {
       const db = createServiceRoleClient();
@@ -145,27 +207,44 @@ export async function POST(request) {
         await recordLoginFailure({ request, name: whitelistedName.full_name, role, personnelId: personnel?.id || null });
         return noStore({ success: false, error: 'Nama atau peran tidak terdaftar sebagai personel aktif.' }, 401);
       }
+      personnelCreated = true;
     } catch (error) {
       console.error('Whitelisted Staff profile creation failed:', error);
       return noStore({ success: false, error: 'Profil personel tidak dapat disiapkan.' }, 503);
     }
   }
 
-  const rank = parsed.data.rank;
-  const position = parsed.data.position;
-  const department = parsed.data.department;
+  const rank = resumesVerifiedSession ? personnel.rank : parsed.data.rank;
+  const position = resumesVerifiedSession ? personnel.position || '' : parsed.data.position;
+  const department = resumesVerifiedSession ? personnel.department : parsed.data.department;
   const ipHash = createHmac('sha256', process.env.INTERNAL_SESSION_SECRET || '').update(requestIp(request)).digest('hex');
   try {
     const db = createServiceRoleClient();
+    if (personnelCreated) {
+      const { error: profileAuditError } = await db.from('personnel_audit_logs').insert({
+        personnel_id: personnel.id,
+        personnel_name: personnel.full_name,
+        role,
+        event: 'PERSONNEL_ADDED',
+        target_name: personnel.full_name,
+        action_details: `Membuat profil personel ${personnel.full_name} pada login pertama dengan akses ${role === 'ADMIN' ? 'Admin' : 'Staff'}.`,
+      });
+      if (profileAuditError) throw profileAuditError;
+    }
     const { error } = await db.from('personnel_audit_logs').insert({
       personnel_id: personnel.id, personnel_name: personnel.full_name, role,
-      event: 'LOGIN_SUCCESS', ip_hash: ipHash,
+      event: resumesVerifiedSession ? 'SESSION_RESUMED' : 'LOGIN_SUCCESS',
+      action_details: resumesVerifiedSession
+        ? 'Sesi PIN aktif. Klik tombol untuk melanjutkan.'
+        : `Login berhasil sebagai ${role === 'ADMIN' ? 'Admin' : 'Staff'}.`,
+      ip_hash: ipHash,
     });
     if (error) throw error;
   } catch (error) {
     console.error('Personnel login audit failed:', error);
     return noStore({ success: false, error: 'Login tidak dapat dicatat. Coba lagi.' }, 503);
   }
+  const expiresAt = resumesVerifiedSession ? rememberedPin.expiresAt : Math.floor(Date.now() / 1000) + 60 * 60 * 24;
   const response = noStore({
     success: true,
     officerName: personnel.full_name,
@@ -175,13 +254,34 @@ export async function POST(request) {
     officerDepartment: department,
   });
   response.cookies.set(INTERNAL_SESSION_COOKIE, createInternalSessionToken({
-    name: personnel.full_name, role, rank, position, department, personnelId: personnel.id,
-  }), sessionCookieOptions());
+    name: personnel.full_name, role, rank, position, department, personnelId: personnel.id, expiresAt,
+  }), browserSessionCookieOptions());
+  response.cookies.set(REMEMBERED_PIN_COOKIE, createRememberedPinToken({
+    personnelId: personnel.id,
+    role,
+    expiresAt,
+  }), sessionCookieOptions(expiresAt - Math.floor(Date.now() / 1000)));
   return response;
 }
 
 export async function DELETE(request) {
   if (!isSameOrigin(request)) return noStore({ success: false, error: 'Asal permintaan tidak valid.' }, 403);
+  const session = getInternalSession(request);
+  if (session) {
+    try {
+      const db = createServiceRoleClient();
+      const { error } = await db.from('personnel_audit_logs').insert({
+        personnel_id: session.personnelId,
+        personnel_name: session.name,
+        role: session.role,
+        event: 'LOGOUT',
+        action_details: 'Logout dari portal.',
+      });
+      if (error) console.error('Personnel logout audit failed:', error);
+    } catch (error) {
+      console.error('Personnel logout audit failed:', error);
+    }
+  }
   const response = noStore({ success: true });
   response.cookies.set(INTERNAL_SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
   return response;

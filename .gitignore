@@ -29,6 +29,10 @@
 !/supabase/migrations/
 /supabase/migrations/*
 !/supabase/migrations/20261022000000_management_lookup_indexes.sql
+!/supabase/migrations/20261023000000_interview_equipment_tracking.sql
+!/supabase/migrations/20261023010000_academy_department_group.sql
+!/supabase/migrations/20261023020000_academy_department_attendance.sql
+!/supabase/migrations/20261023030000_combined_academy_equipment.sql
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -45,3 +49,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+
+!/supabase/migrations/20261023040000_department_source_of_truth.sql

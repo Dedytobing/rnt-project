@@ -4,7 +4,6 @@ import ReviewPage from '../../review/page';
 import InterviewPage from '../../interview/page';
 import ManagementPage from '../../management/page';
 import AcademyPage from '../../academy/page';
-import PlacementPage from '../../placement/page';
 import AuditLogsPage from '../../audit-logs/page';
 
 const pages = {
@@ -14,7 +13,6 @@ const pages = {
   management: ManagementPage,
   academy: AcademyPage,
   absensi: AcademyPage,
-  placement: PlacementPage,
   'audit-log': AuditLogsPage,
 };
 

@@ -197,7 +197,7 @@ export async function POST(request) {
 
     // 3. SESI WAWANCARA (Interviewer)
     if (action === 'UPDATE_INTERVIEW') {
-      const { id, assistName, statusInterview, deptPreference = '', notesInterviewer } = body;
+      const { id, interviewerName = '', assistName, statusInterview, deptPreference = '', notesInterviewer } = body;
       if (!['', 'LSSD', 'LSPD'].includes(deptPreference)) {
         return NextResponse.json({ success: false, error: 'Preferensi departemen tidak valid.' }, { status: 400 });
       }
@@ -207,7 +207,7 @@ export async function POST(request) {
       }
 
       const interviewUpdate = {
-        interviewer_name: session.name,
+        interviewer_name: interviewerName || session.name,
         assist_name: assistName,
         status_interview: statusInterview,
         dept_preference: deptPreference || null,
@@ -245,12 +245,12 @@ export async function POST(request) {
       }
       const { id, nama, linkCv, statusCv, mdtCheck, mappingDept, statusInterview, catatan, notesInvestigator, notesInterviewer, departmentOnly } = body;
 
-      if (mappingDept && !['LSSD', 'LSPD'].includes(mappingDept)) {
+      if (mappingDept && !['LSSD', 'LSPD', 'DOC'].includes(mappingDept)) {
         return NextResponse.json({ success: false, error: 'Departemen final tidak valid.' }, { status: 400 });
       }
 
       if (departmentOnly) {
-        if (!id || !['LSSD', 'LSPD'].includes(mappingDept)) {
+        if (!id || !['LSSD', 'LSPD', 'DOC'].includes(mappingDept)) {
           return NextResponse.json({ success: false, error: 'Kandidat dan departemen final wajib dipilih.' }, { status: 400 });
         }
 

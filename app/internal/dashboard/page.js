@@ -16,12 +16,28 @@ import { BatchContext, candidatesUrl } from '../BatchContext';
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
 const departmentLogos = { LSSD: '/logos/lssd.png', LSPD: '/logos/lspd.png' };
+function departmentBadgeClass(department) {
+  if (department === 'LSSD') return 'department-badge department-badge-lssd';
+  if (department === 'LSPD') return 'department-badge department-badge-lspd';
+  if (department === 'DOC') return 'department-badge department-badge-doc';
+  return 'department-badge department-badge-unset';
+}
+
 function normalizeMdtStatus(value) {
   const status = String(value || '').trim().toLowerCase();
   if (status === 'green') return 'Green';
   if (status === 'red' || status.includes('black') || status.includes('penalty') || status.includes('penalti')) return 'Red';
   if (status === 'yellow' || status === 'orange') return 'Orange';
   return status ? 'Orange' : '';
+}
+
+function displayStaffFirstNames(value) {
+  return String(value || '')
+    .split(/\s*[,;|]\s*/)
+    .map((name) => name.trim().split(/\s+/)[0])
+    .filter(Boolean)
+    .map((name) => `${name.charAt(0).toLocaleUpperCase('id-ID')}${name.slice(1).toLocaleLowerCase('id-ID')}`)
+    .join(', ') || '-';
 }
 
 const recruitmentStages = [
@@ -86,6 +102,7 @@ export default function InternalDashboard() {
   const [filterDept, setFilterDept] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [detailCandidate, setDetailCandidate] = useState(null);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -109,6 +126,13 @@ export default function InternalDashboard() {
   useEffect(() => {
     setCurrentPage(1);
   }, [search, filterStatus, filterInterview, filterMdt, filterDept]);
+
+  useEffect(() => {
+    if (!detailCandidate) return undefined;
+    const closeOnEscape = (event) => { if (event.key === 'Escape') setDetailCandidate(null); };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [detailCandidate]);
 
   // Pengecekan apakah ada filter aktif
   const isFilterActive = 
@@ -176,9 +200,15 @@ export default function InternalDashboard() {
   const visibleRecruitmentStages = recruitmentStages
     .map((stage, index) => ({ ...stage, count: recruitmentStageCounts[index] }))
     .filter(stage => stage.count > 0);
+  const detailNotes = detailCandidate ? [
+    ['Catatan CV', detailCandidate.catatan],
+    ['Saran evaluator', detailCandidate.saran],
+    ['Catatan investigator', detailCandidate.notes_investigator],
+    ['Catatan interviewer', detailCandidate.notes_interviewer],
+  ].filter(([, value]) => typeof value === 'string' && value.trim()) : [];
 
   return (
-    <div className="space-y-6">
+    <div className="dashboard-page space-y-6">
       {loadError && (
         <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           Data kandidat gagal dimuat: {loadError}. Muat ulang halaman setelah masuk kembali ke portal staff.
@@ -329,7 +359,7 @@ export default function InternalDashboard() {
 
         {/* TABEL DATA */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="dashboard-candidate-table w-full text-center border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
                 <th className="p-3">Nama Kandidat</th>
@@ -352,11 +382,11 @@ export default function InternalDashboard() {
                   const statusDisplay = !c.status_cv ? 'Antrean Baru' : c.status_cv === 'Interview' ? 'Lolos Review CV' : c.status_cv;
                   const mdtStatus = normalizeMdtStatus(c.mdt_check);
                   const interviewStatusDisplay = c.status_cv !== 'Interview'
-                    ? 'Belum masuk tahap interview'
-                    : c.status_interview || 'Belum ada keputusan';
+                    ? 'Belum Interview'
+                    : c.status_interview || 'Belum Diputuskan';
                   return (
-                    <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition">
-                      <td className="p-3 font-bold text-slate-800">{c.nama}</td>
+                    <tr key={c.id} className="dashboard-candidate-row border-b border-slate-100 hover:bg-slate-50/80 transition">
+                      <td className="p-3 font-bold text-slate-800"><button type="button" title={c.nama} onClick={() => setDetailCandidate(c)} aria-haspopup="dialog" className="text-center text-slate-800 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">{c.nama}</button></td>
                       <td className="p-3 text-slate-600">{c.gender}</td>
                       <td className="p-3">
                         <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
@@ -375,11 +405,9 @@ export default function InternalDashboard() {
                           </span>
                         ) : '-'}
                       </td>
-                      <td className="p-3 font-bold text-slate-700">{c.mapping_dept || '-'}</td>
-                      <td className="p-3 text-slate-600">{c.officer_reviewer || '-'}</td>
-                      <td className="p-3 text-slate-600">
-                        {c.interviewer_name ? `${c.interviewer_name}${c.assist_name ? `, ${c.assist_name}` : ''}` : '-'}
-                      </td>
+                      <td className="p-3">{c.mapping_dept ? <span className={departmentBadgeClass(c.mapping_dept)}>{c.mapping_dept}</span> : <span className="text-slate-500">—</span>}</td>
+                      <td className="p-3 text-slate-600">{displayStaffFirstNames(c.officer_reviewer)}</td>
+                      <td className="p-3 text-slate-600">{displayStaffFirstNames([c.interviewer_name, c.assist_name].filter(Boolean).join(', '))}</td>
                       <td className="p-3">
                         <span className={`rounded-full border px-2 py-1 text-[9px] font-bold ${
                           c.status_interview === 'Passed' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
@@ -402,6 +430,43 @@ export default function InternalDashboard() {
         )}
 
       </div>
+
+      {detailCandidate && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/60 p-2 backdrop-blur-sm sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setDetailCandidate(null); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="candidate-detail-title" className="candidate-detail-modal flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-4">
+          <header className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+            <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Rincian kandidat</p><h2 id="candidate-detail-title" className="mt-0.5 truncate text-xl font-bold text-slate-900">{detailCandidate.nama}</h2><div className="mt-1.5 flex flex-wrap items-center gap-1.5"><span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">{detailCandidate.gender || 'Gender belum diisi'}</span><span className={departmentBadgeClass(detailCandidate.mapping_dept)}>{detailCandidate.mapping_dept || 'Belum ada departemen final'}</span></div></div>
+            <div className="flex shrink-0 items-center gap-2">{detailCandidate.link_cv && <a href={detailCandidate.link_cv} target="_blank" rel="noreferrer" className="inline-flex rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Buka Thread CV ↗</a>}<button type="button" onClick={() => setDetailCandidate(null)} aria-label="Tutup rincian kandidat" className="rounded-lg px-3 py-1 text-2xl leading-none text-slate-500 hover:bg-slate-100">×</button></div>
+          </header>
+          <div className={`grid min-h-0 flex-1 gap-3 overflow-hidden ${detailNotes.length >= 3 ? 'md:grid-cols-[1.05fr_0.95fr]' : ''}`}>
+            <section className="min-h-0 overflow-hidden pr-1"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Data dan proses</h3><div className="mb-2 grid grid-cols-3 gap-2">
+              <DetailStatus label="Status CV" value={!detailCandidate.status_cv ? 'Antrean Baru' : detailCandidate.status_cv === 'Interview' ? 'Lolos Review CV' : detailCandidate.status_cv} tone={detailCandidate.status_cv === 'Rejected' ? 'red' : detailCandidate.status_cv === 'Pending' ? 'amber' : detailCandidate.status_cv === 'Interview' ? 'indigo' : 'slate'} />
+              <DetailStatus label="MDT" value={normalizeMdtStatus(detailCandidate.mdt_check) || 'Belum diperiksa'} tone={normalizeMdtStatus(detailCandidate.mdt_check) === 'Green' ? 'green' : normalizeMdtStatus(detailCandidate.mdt_check) === 'Red' ? 'red' : 'amber'} />
+              <DetailStatus label="Status Interview" value={detailCandidate.status_cv !== 'Interview' ? 'Belum masuk tahap' : detailCandidate.status_interview || 'Belum ada keputusan'} tone={detailCandidate.status_interview === 'Passed' ? 'green' : detailCandidate.status_interview === 'Failed' ? 'red' : detailCandidate.status_interview === 'Pending' ? 'amber' : 'slate'} />
+            </div><div className="grid grid-cols-2 gap-2">
+              <DetailField label="Minat departemen" value={detailCandidate.dept_preference || 'Belum diisi'} />
+              <DetailField label="Departemen final" value={detailCandidate.mapping_dept || 'Belum ditetapkan'} />
+              <DetailField label="Reviewer CV" value={detailCandidate.officer_reviewer || '—'} />
+              <DetailField label="Interviewer" value={[detailCandidate.interviewer_name, detailCandidate.assist_name].filter((name) => typeof name === 'string' && name.trim()).join(', ') || '—'} />
+            </div>{detailNotes.length > 0 && detailNotes.length < 3 && <div className="mt-3"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Catatan dan saran evaluator</h3><div className="grid gap-2 sm:grid-cols-2">{detailNotes.map(([label, value]) => <DetailField key={label} label={label} value={value} multiline />)}</div></div>}</section>
+            {detailNotes.length >= 3 && <section className="min-h-0 overflow-hidden pr-1"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Catatan dan saran evaluator</h3><div className="grid gap-2 sm:grid-cols-2">
+              {detailNotes.map(([label, value]) => <DetailField key={label} label={label} value={value} multiline />)}
+            </div>
+            </section>}
+          </div>
+          <footer className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-slate-100 pt-2 text-[11px] text-slate-500"><span>Didaftarkan: {detailCandidate.created_at ? new Date(detailCandidate.created_at).toLocaleString('id-ID') : '—'}</span><span>Terakhir diperbarui: {detailCandidate.updated_at ? new Date(detailCandidate.updated_at).toLocaleString('id-ID') : '—'}</span></footer>
+        </section>
+      </div>}
     </div>
   );
+}
+
+function DetailField({ label, value, multiline = false }) {
+  return <div className="candidate-detail-field min-w-0 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2">
+    <div className="text-[11px] font-semibold text-slate-500">{label}</div>
+    <div className={`mt-0.5 text-[13px] leading-5 text-slate-800 ${multiline ? 'max-h-24 overflow-y-auto whitespace-pre-wrap break-words pr-1' : 'break-words'}`}>{value}</div>
+  </div>;
+}
+
+function DetailStatus({ label, value, tone }) {
+  return <div className="candidate-detail-status min-w-0 rounded-lg border border-slate-100 bg-white px-2 py-1.5"><div className="mb-1 text-[10px] font-semibold text-slate-500">{label}</div><span className={`detail-status-pill detail-status-pill-${tone}`}><span className="truncate">{value}</span></span></div>;
 }

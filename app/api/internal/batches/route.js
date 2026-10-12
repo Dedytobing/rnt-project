@@ -26,6 +26,18 @@ function adminSession(request) {
   return { session };
 }
 
+async function recordBatchActivity(db, session, event, batchName, actionDetails) {
+  const { error } = await db.from('personnel_audit_logs').insert({
+    personnel_id: session.personnelId,
+    personnel_name: session.name,
+    role: session.role,
+    event,
+    target_name: batchName,
+    action_details: actionDetails,
+  });
+  if (error) console.error('Batch activity audit failed:', error);
+}
+
 async function readBatchInput(request) {
   try {
     const body = await request.json();
@@ -93,9 +105,11 @@ export async function POST(request) {
   const { value, response: inputError } = await readBatchInput(request);
   if (inputError) return inputError;
   try {
-    const { data, error } = await createInternalDataClient(session).from('recruitment_batches')
+    const db = createInternalDataClient(session);
+    const { data, error } = await db.from('recruitment_batches')
       .insert({ ...value, is_active: false }).select().single();
     if (error) throw error;
+    await recordBatchActivity(db, session, 'BATCH_CREATED', data.name, `Membuat batch rekrutmen ${data.name} beserta jadwal tahapannya.`);
     return NextResponse.json({ success: true, batch: data });
   } catch (error) {
     console.error('Internal batch create failed:', error);
@@ -114,10 +128,14 @@ export async function PATCH(request) {
   const { value, response: inputError } = await readBatchInput({ json: async () => { const { id: ignored, ...fields } = body; return fields; } });
   if (inputError) return inputError;
   try {
-    const { data, error } = await createInternalDataClient(session).from('recruitment_batches')
+    const db = createInternalDataClient(session);
+    const { data: previous, error: lookupError } = await db.from('recruitment_batches').select('name').eq('id', id.data).is('deleted_at', null).maybeSingle();
+    if (lookupError) throw lookupError;
+    const { data, error } = await db.from('recruitment_batches')
       .update(value).eq('id', id.data).is('deleted_at', null).select().maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ success: false, error: 'Batch tidak ditemukan.' }, { status: 404 });
+    await recordBatchActivity(db, session, 'BATCH_UPDATED', data.name, `Memperbarui nama atau jadwal batch ${data.name}${previous?.name && previous.name !== data.name ? ` (sebelumnya ${previous.name})` : ''}.`);
     return NextResponse.json({ success: true, batch: data });
   } catch (error) {
     console.error('Internal batch update failed:', error);
@@ -134,11 +152,15 @@ export async function DELETE(request) {
   const id = z.uuid().safeParse(body?.id);
   if (!id.success) return NextResponse.json({ success: false, error: 'Batch tidak valid.' }, { status: 400 });
   try {
-    const { data, error } = await createInternalDataClient(session).from('recruitment_batches')
+    const db = createInternalDataClient(session);
+    const { data: previous, error: lookupError } = await db.from('recruitment_batches').select('name').eq('id', id.data).is('deleted_at', null).maybeSingle();
+    if (lookupError) throw lookupError;
+    const { data, error } = await db.from('recruitment_batches')
       .update({ deleted_at: new Date().toISOString(), is_active: false })
       .eq('id', id.data).is('deleted_at', null).select('id').maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ success: false, error: 'Batch tidak ditemukan.' }, { status: 404 });
+    if (previous) await recordBatchActivity(db, session, 'BATCH_DELETED', previous.name, `Menghapus batch rekrutmen ${previous.name}.`);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Internal batch delete failed:', error);
