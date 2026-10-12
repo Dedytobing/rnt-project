@@ -235,7 +235,7 @@ export async function POST(request) {
       personnel_id: personnel.id, personnel_name: personnel.full_name, role,
       event: resumesVerifiedSession ? 'SESSION_RESUMED' : 'LOGIN_SUCCESS',
       action_details: resumesVerifiedSession
-        ? 'Sesi PIN aktif. Klik tombol untuk melanjutkan.'
+        ? 'Melanjutkan sesi dengan verifikasi PIN 24 jam yang masih aktif.'
         : `Login berhasil sebagai ${role === 'ADMIN' ? 'Admin' : 'Staff'}.`,
       ip_hash: ipHash,
     });
