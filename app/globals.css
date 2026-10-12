@@ -30,9 +30,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #6e9877
 /* Candidate application */
 .candidate-page { min-height: 100vh; background: #f6f7f4; display: flex; flex-direction: column; }
 .candidate-header { height: 68px; padding: 0 max(24px, calc((100vw - 1060px) / 2)); display: flex; justify-content: space-between; align-items: center; background: white; border-bottom: 1px solid #e9ede7; }
-.candidate-brand { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; color: #273e30; }
-.candidate-brand-mark { height: 31px; width: 31px; display: grid; place-items: center; border-radius: 8px; background: #264632; color: #d2ebb6; font-family: Georgia,serif; font-size: 17px; }
-.candidate-brand small { display: block; margin-top: 3px; color: #869188; font-size: 8px; font-weight: 500; letter-spacing: .7px; }
+.candidate-brand { display: flex; align-items: center; font-size: 14px; font-weight: 700; color: #273e30; }
+.candidate-brand small { display: block; margin-top: 3px; color: #869188; font-size: 9px; font-weight: 500; letter-spacing: .7px; }
 .candidate-staff-link { min-height: 34px; padding: 0 11px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; border: 1px solid #254532; border-radius: 6px; color: #fff; background: #254532; font-size: 10px; font-weight: 700; text-decoration: none; transition: color .15s ease,background .15s,border-color .15s; }.candidate-staff-link span { padding-left: 4px; color: #fff; font-size: 13px; }.candidate-staff-link:hover { color: #fff; border-color: #315a41; background: #315a41; }.candidate-staff-link:hover span { color: #fff; }
 .candidate-form-wrap { width: min(100% - 32px, 520px); margin: 62px auto 48px; padding: 31px 34px 26px; background: white; border: 1px solid #e7ebe5; border-radius: 9px; box-shadow: 0 6px 24px #20332608; }
 .candidate-form-heading { margin-bottom: 25px; }.candidate-kicker { color: #64806a; font-size: 8px; font-weight: 800; letter-spacing: 1.4px; }.candidate-form-heading h1 { margin: 10px 0 7px; color: #20372a; font-size: 24px; letter-spacing: -.5px; }.candidate-form-heading p { max-width: 380px; margin: 0; color: #7b887e; font-size: 11px; line-height: 1.65; }
@@ -48,6 +47,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #6e9877
 .staff-sidebar > div:first-child { display: block !important; }
 .staff-brand { min-height: 55px; margin: 0 4px 27px; padding: 0 7px 15px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #ffffff18; color: #f1f5ef; font-size: 12px; font-weight: 800; letter-spacing: .5px; }
 .staff-brand > div { width: 34px !important; height: 34px !important; display: grid; place-items: center; border-radius: 9px !important; color: #173121 !important; background: #b8dc91 !important; font-family: Georgia,serif; font-size: 17px; }
+.staff-brand > img { width: 46px; height: 46px; flex: 0 0 46px; object-fit: contain; border-radius: 10px; }
 .staff-brand small { display: block; margin-top: 3px; color: #91a195; font-size: 7px; font-weight: 600; letter-spacing: 1.2px; }.brand-pulse { width: 7px; height: 7px; margin-left: auto; border-radius: 50%; background: #a9d67e; box-shadow: 0 0 0 4px #a9d67e18; }
 .nav-caption { margin: 0 11px 9px; color: #82958a; font-size: 8px; font-weight: 800; letter-spacing: 1.5px; }
 .staff-sidebar nav { display: grid !important; gap: 3px !important; }.staff-nav-link { min-height: 39px; padding: 0 11px !important; display: flex; align-items: center; gap: 11px; border-radius: 6px; color: #aebbb1 !important; font-size: 10px !important; font-weight: 600 !important; transition: .15s ease; }.staff-nav-link > span:first-child { width: 18px; color: #91a598; font-size: 15px; text-align: center; }.staff-nav-link:hover { color: white !important; background: #ffffff0c; }.staff-nav-link.active { color: #f5f8f1 !important; background: #2b4635; box-shadow: inset 2px 0 #bde296; }.staff-nav-link.active > span:first-child { color: #c6e9a1; }.nav-admin-tag { margin-left: auto; padding: 3px 5px; border-radius: 4px; color: #f1d0b9; background: #ffffff12; font-size: 7px; letter-spacing: .6px; }
@@ -71,7 +71,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #6e9877
 .min-h-screen.bg-slate-900 { min-height: 100vh; background: #edf1ec !important; }.min-h-screen.bg-slate-900 > div { max-width: 420px; padding: 30px !important; color: #26392d; background: white !important; border: 1px solid #e0e7df !important; border-radius: 9px !important; box-shadow: 0 12px 40px #23362a12 !important; }.min-h-screen.bg-slate-900 > div > div:first-child { width: 42px !important; height: 42px !important; border-radius: 10px !important; color: #183222 !important; background: #c3e29f !important; box-shadow: none !important; }.min-h-screen.bg-slate-900 h2 { color: #23372b; font-size: 19px; }.min-h-screen.bg-slate-900 p,.min-h-screen.bg-slate-900 label { color: #78867c; }.min-h-screen.bg-slate-900 input,.min-h-screen.bg-slate-900 select { color: #24392c !important; background: #fbfcfa !important; border-color: #dfe6de !important; border-radius: 5px !important; }.min-h-screen.bg-slate-900 form button[type="submit"] { color: white; background: #254532 !important; border-radius: 7px !important; box-shadow: none !important; }.min-h-screen.bg-slate-900 form button[type="submit"]:hover { background: #315a41 !important; }
 
 @media (max-width: 1050px) { .staff-sidebar { width: 215px !important; }.staff-content .grid.grid-cols-5 { grid-template-columns: repeat(3,minmax(0,1fr)); } }
-@media (max-width: 800px) { .staff-workspace { display: block; }.staff-sidebar { position: relative; width: 100% !important; height: auto; min-height: 0; padding: 9px 12px !important; }.staff-brand { min-height: 40px; margin: 0 3px 8px; padding: 0 4px 8px; }.staff-brand > div { width: 29px !important; height: 29px !important; }.nav-caption { display: none; }.staff-sidebar nav { display: flex !important; overflow-x: auto; }.staff-nav-link { flex: 0 0 auto; min-height: 34px; padding: 0 9px !important; }.staff-sidebar > div:last-child { display: none; }.staff-topbar { min-height: 88px; padding: 15px 19px; }.staff-content { padding: 17px 18px 30px; }.staff-content .grid.grid-cols-5 { grid-template-columns: repeat(2,minmax(0,1fr)); }.staff-content .grid.grid-cols-12 > .col-span-6,.staff-content .grid.grid-cols-12 > .col-span-4,.staff-content .grid.grid-cols-12 > .col-span-8 { grid-column: 1 / -1; } }
+@media (max-width: 800px) { .staff-workspace { display: block; }.staff-sidebar { position: relative; width: 100% !important; height: auto; min-height: 0; padding: 9px 12px !important; }.staff-brand { min-height: 48px; margin: 0 3px 8px; padding: 0 4px 8px; }.staff-brand > div { width: 29px !important; height: 29px !important; }.staff-brand > img { width: 38px; height: 38px; flex-basis: 38px; }.nav-caption { display: none; }.staff-sidebar nav { display: flex !important; overflow-x: auto; }.staff-nav-link { flex: 0 0 auto; min-height: 34px; padding: 0 9px !important; }.staff-sidebar > div:last-child { display: none; }.staff-topbar { min-height: 88px; padding: 15px 19px; }.staff-content { padding: 17px 18px 30px; }.staff-content .grid.grid-cols-5 { grid-template-columns: repeat(2,minmax(0,1fr)); }.staff-content .grid.grid-cols-12 > .col-span-6,.staff-content .grid.grid-cols-12 > .col-span-4,.staff-content .grid.grid-cols-12 > .col-span-8 { grid-column: 1 / -1; } }
 @media (max-width: 800px) { .placement-layout { grid-template-columns: 1fr; }.placement-list { max-height: 260px; } }
 @media (max-width: 520px) { .candidate-header { height: 60px; padding: 0 16px; }.candidate-form-wrap { width: calc(100% - 24px); margin: 25px auto 28px; padding: 23px 19px 20px; }.candidate-form-heading h1 { font-size: 21px; }.staff-topbar { padding: 13px 14px; align-items: flex-start; gap: 8px; }.staff-topbar h1 { font-size: 17px; }.staff-breadcrumb { font-size: 7px; }.staff-live { display: none; }.staff-new-candidate { padding: 8px 9px; font-size: 0; }.staff-new-candidate span { padding: 0; font-size: 16px; }.staff-content { padding: 13px 10px 25px; }.staff-content .grid.grid-cols-5 { gap: 7px; }.staff-content .grid.grid-cols-5 > div { min-height: 76px; padding: 10px !important; }.staff-content .grid.grid-cols-5 > div > div:first-child { font-size: 7px; }.staff-content .grid.grid-cols-5 > div > div:last-child { font-size: 23px; }.staff-content .bg-white.p-6 { padding: 13px !important; }.staff-content .grid.grid-cols-12 { gap: 9px; }.min-h-screen.bg-slate-900 > div { padding: 23px 19px !important; }.staff-panel-heading { align-items: flex-start; padding: 14px; }.staff-panel-heading p { max-width: 260px; font-size: 9px; }.placement-editor { padding: 16px; } }
 
@@ -227,7 +227,11 @@ html[data-theme="dark"] body { color: var(--ink) !important; background: var(--p
 html[data-theme="dark"] .candidate-page { color: var(--ink); background: #111914; }
 html[data-theme="dark"] .candidate-header, html[data-theme="dark"] .candidate-form-wrap { color: var(--ink); background: #1b2720; border-color: #35443a; }
 html[data-theme="dark"] .candidate-brand, html[data-theme="dark"] .candidate-form-heading h1, html[data-theme="dark"] .candidate-form label { color: #e4ece5; }
-html[data-theme="dark"] .candidate-brand small, html[data-theme="dark"] .candidate-form-heading p, html[data-theme="dark"] .candidate-field-hint { color: #a1aea4; }
+html[data-theme="dark"] .candidate-brand small { color: #b8c9be; }
+html[data-theme="dark"] .candidate-form-heading > p:not(.candidate-announcement), html[data-theme="dark"] .candidate-field-hint { color: #cbd5d0 !important; }
+html[data-theme="dark"] .candidate-announcement { font-weight: 600; line-height: 1.55; }
+html[data-theme="dark"] .candidate-announcement.bg-emerald-50 { color: #d1fae5 !important; background: #123326 !important; border-color: #276749 !important; }
+html[data-theme="dark"] .candidate-announcement.bg-amber-50 { color: #fef3c7 !important; background: #3a3020 !important; border-color: #80621e !important; }
 html[data-theme="dark"] .candidate-form input, html[data-theme="dark"] .candidate-form select { color: #e4ece5; background: #111914; border-color: #46564a; }
 html[data-theme="dark"] .candidate-form input::placeholder { color: #829087; }
 html[data-theme="dark"] .candidate-footer { color: #87968b; }
@@ -235,6 +239,10 @@ html[data-theme="dark"] .candidate-staff-link, html[data-theme="dark"] .candidat
 html[data-theme="dark"] .candidate-staff-link { background: #254532; border-color: #315842; }
 html[data-theme="dark"] .candidate-staff-link:hover { color: #fff; background: #315a41; }
 html[data-theme="dark"] .candidate-staff-link:hover span { color: #fff; }
+html[data-theme="dark"] .candidate-submit { color: #fff !important; background: #1f442e !important; font-weight: 600; }
+html[data-theme="dark"] .candidate-submit:hover:not(:disabled) { background: #2c5039 !important; }
+html[data-theme="dark"] .candidate-submit:disabled { background: #142a1d !important; }
+.candidate-header > .candidate-brand, .candidate-header > .candidate-staff-link { align-self: center; }
 
 /* Shared staff portal surfaces, cards, and form controls */
 html[data-theme="dark"] .staff-topbar { color: #e4ece5; background: #1b2720; border-color: #35443a; }
@@ -419,8 +427,6 @@ html[data-theme="dark"] .staff-login-department.selected .staff-department-check
 .staff-login-card { width: min(100%, 575px); height: auto; max-height: none; padding: 22px 26px !important; overflow: visible; display: grid; gap: 10px; color: #111827; background: #fff; border: 1px solid #dfe5e0; border-radius: 18px !important; box-shadow: 0 18px 50px #17291e18 !important; }
 .staff-login-card :where(h1,h2,h3,p,label,legend,strong,small,span,button,a) { color: #1f2937 !important; }
 .staff-login-heading { display: grid; justify-items: center; gap: 10px; }
-.staff-login-mark { width: 52px !important; height: 52px !important; border-radius: 15px !important; box-shadow: 0 8px 18px #25453224 !important; }
-.staff-login-eyebrow { display: block; margin-bottom: 4px; color: #315842 !important; font-size: 9px; font-weight: 800; letter-spacing: 1.7px; }
 .staff-login-card h2 { color: #111827 !important; font-size: 22px !important; }
 .staff-login-card p, .staff-login-card small { color: #4b5563 !important; }
 .staff-login-card .staff-login-back-row { width: 100%; display: flex; justify-content: flex-start; }
@@ -453,7 +459,6 @@ html[data-theme="dark"] .staff-login-department.selected .staff-department-check
 .staff-login-card button[type="submit"]:hover { background: #315a41 !important; }
 .staff-login-card .staff-login-heading { gap: 5px; }
 .staff-login-card .staff-login-heading > div:last-child > p { margin-top: 2px !important; }
-.staff-login-card .staff-login-mark { width: 40px !important; height: 40px !important; border-radius: 12px !important; font-size: 18px !important; }
 .staff-login-card h2 { font-size: 20px !important; }
 .staff-login-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px 10px; }
 .staff-login-form .form-span-all { grid-column: 1 / -1; }
@@ -486,7 +491,6 @@ html[data-theme="dark"] .staff-login-page { color: #f3f4f6 !important; backgroun
 html[data-theme="dark"] .staff-login-card { color: #f3f4f6 !important; background: #1b2720 !important; border-color: #35443a !important; box-shadow: 0 18px 50px #0008 !important; }
 html[data-theme="dark"] .staff-login-card :where(h1,h2,h3,p,label,legend,strong,small,span,button,a) { color: #e5e7eb !important; }
 html[data-theme="dark"] .staff-login-card h2, html[data-theme="dark"] .staff-login-card .staff-login-department strong, html[data-theme="dark"] .staff-login-card .staff-login-role strong { color: #f3f4f6 !important; }
-html[data-theme="dark"] .staff-login-card .staff-login-eyebrow { color: #a7d5ae !important; }
 html[data-theme="dark"] .staff-login-card p, html[data-theme="dark"] .staff-login-card small, html[data-theme="dark"] .staff-login-card .staff-login-role small, html[data-theme="dark"] .staff-login-card .staff-login-department small { color: #cbd5e1 !important; }
 html[data-theme="dark"] .staff-login-card input:not([type="radio"]):not([type="checkbox"]), html[data-theme="dark"] .staff-login-card select, html[data-theme="dark"] .staff-login-card textarea { color: #f3f4f6 !important; background: #111914 !important; border-color: #46564a !important; }
 html[data-theme="dark"] .staff-login-card input::placeholder, html[data-theme="dark"] .staff-login-card textarea::placeholder { color: #cbd5e1 !important; opacity: 1; }

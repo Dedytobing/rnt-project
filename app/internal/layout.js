@@ -506,14 +506,12 @@ function InternalLayoutContent({ children }) {
               href="/"
               className="staff-login-back-link"
             >
-              <span aria-hidden="true">←</span>
+              {/* <span aria-hidden="true">←</span> */}
               Kembali
             </Link>
           </div>
           <div className="staff-login-heading">
-            <div className="staff-login-mark w-14 h-14 bg-[#254532] rounded-2xl flex items-center justify-center mx-auto text-white font-black text-2xl shadow-lg shadow-[#254532]/20">R</div>
             <div>
-              <span className="staff-login-eyebrow">AKSES PERSONEL RNT</span>
               <h2 className="text-xl font-bold text-white">RNT Internal Portal</h2>
               <p className="text-xs text-slate-400 mt-1">Lengkapi identitas dinas, peran, dan PIN portal internal.</p>
             </div>
@@ -778,7 +776,7 @@ function InternalLayoutContent({ children }) {
       <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between p-6 shrink-0 staff-sidebar">
         <div className="space-y-6">
           <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/dashboard` : '/internal/select-batch'} className="flex items-center gap-3 staff-brand">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold">R</div>
+            <Image src="/logos/rnt-logo.svg" alt="Logo RNT" width={46} height={46} className="h-[46px] w-[46px] rounded-lg" />
             <span>RNT <small>PERSONNEL PORTAL</small></span>
             <span className="brand-pulse" aria-label="Sistem aktif" />
           </Link>

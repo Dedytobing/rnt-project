@@ -81,7 +81,7 @@ export default function PinGeneratorPage() {
   return (
     <main className="pin-generator-page min-h-screen bg-[#edf1ec] px-5 py-10 text-slate-800">
       <div className="mx-auto w-full max-w-lg">
-        <Link href="/" className="rnt-back-link">← Kembali ke RNT</Link>
+        <Link href="/" className="rnt-back-link">Kembali ke RNT</Link>
         <section className="mt-5 rounded-xl border border-[#e0e7df] bg-white p-6 shadow-sm sm:p-8">
           <div className="mb-6">
             <p className="text-xs font-bold tracking-[0.2em] text-[#315842]">RNT · AKSES INTERNAL</p>

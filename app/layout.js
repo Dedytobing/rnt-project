@@ -3,8 +3,8 @@ import Script from 'next/script';
 import ThemeToggle from './theme-toggle';
 
 export const metadata = {
-  title: 'RED Project — Recruitment Command',
-  description: 'Portal rekrutmen dan manajemen personel RED Project.',
+  title: 'RNT | Recruitment and Training',
+  description: 'Portal rekrutmen dan manajemen personel RNT.',
 };
 
 export default function RootLayout({ children }) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 function publicBatchName(name) {
   return String(name || 'Batch rekrutmen')
@@ -64,7 +65,7 @@ export default function CandidatePage() {
   return (
     <main className="candidate-page">
       <header className="candidate-header">
-        <Link href="/" className="candidate-brand"><span className="candidate-brand-mark">R</span><span>RED Project<small>Recruitment</small></span></Link>
+        <Link href="/" className="candidate-brand"><span>Recruitment and Training<small>Personnel Portal</small></span></Link>
         <Link href="/internal/select-batch" className="candidate-staff-link">Portal staff <span>↗</span></Link>
       </header>
 
@@ -121,7 +122,7 @@ export default function CandidatePage() {
           <p className="candidate-required-note">Kolom bertanda * wajib diisi.</p>
         </form>
       </section>
-      <footer className="candidate-footer">RED PROJECT <span>·</span> RECRUITMENT MANAGEMENT</footer>
+      <footer className="candidate-footer">RNT | Recruitment and Training <span>·</span> RECRUITMENT MANAGEMENT</footer>
     </main>
   );
 }
