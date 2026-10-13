@@ -71,7 +71,7 @@ export async function GET(request) {
         if (error) throw error;
         access = data;
       }
-      if (access && personnel?.rank && ['LSPD', 'LSSD'].includes(personnel.department)) {
+      if (access && personnel?.rank && ['LSPD', 'LSSD', 'SASP'].includes(personnel.department)) {
         profile = {
           name: personnel.full_name,
           role: personnel.role,
@@ -237,6 +237,21 @@ export async function POST(request) {
     } catch (error) {
       console.error('Whitelisted Staff profile creation failed:', error);
       return noStore({ success: false, error: 'Profil personel tidak dapat disiapkan.' }, 503);
+    }
+  }
+
+  if (!personnelCreated && !resumesVerifiedSession && personnel.department !== parsed.data.department) {
+    try {
+      const db = createServiceRoleClient();
+      const { error } = await db.from('rnt_personnel')
+        .update({ department: parsed.data.department })
+        .eq('id', personnel.id)
+        .eq('is_active', true);
+      if (error) throw error;
+      personnel = { ...personnel, department: parsed.data.department };
+    } catch (error) {
+      console.error('Personnel department profile update failed:', error);
+      return noStore({ success: false, error: 'Departemen profil personel tidak dapat disimpan.' }, 503);
     }
   }
 

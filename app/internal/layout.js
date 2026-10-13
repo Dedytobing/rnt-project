@@ -659,16 +659,17 @@ function InternalLayoutContent({ children }) {
                 <option value="Recruitment And Training Division" />
                 <option value="Personnel Services Officer" />
               </datalist>
-              <p className="mt-1 text-left text-[10px] text-slate-500">Pilih saran atau ketik langsung pada kolom.</p>
+              <p className="staff-login-helper mt-1 text-left">Pilih saran atau ketik langsung pada kolom.</p>
             </div>
 
             <fieldset className="staff-login-departments form-span-all">
               <legend className="block text-xs font-bold text-slate-300 mb-2">Departemen *</legend>
               <p className="staff-login-department-hint">Pilih departemen yang akan dicantumkan pada tanda tangan balasan CV.</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {[
                   { id: 'LSPD', name: 'Los Santos Police Department', logo: '/logos/lspd.png' },
                   { id: 'LSSD', name: 'Los Santos Sheriff Department', logo: '/logos/lssd.png' },
+                  { id: 'SASP', name: 'San Andreas State Police', logo: '/logos/sasp.png' },
                 ].map((department) => (
                   <label key={department.id} className={`staff-login-department ${inputDepartment === department.id ? 'selected' : ''}`}>
                     <input
@@ -681,7 +682,7 @@ function InternalLayoutContent({ children }) {
                       onChange={() => setInputDepartment(department.id)}
                     />
                     <span className="staff-department-logo"><Image src={department.logo} alt="" width={36} height={36} /></span>
-                    <span className="staff-department-copy"><strong>{department.id}</strong><small>{department.name}</small></span>
+                    <span className="staff-department-copy"><strong>{department.id}</strong></span>
                     <span className="staff-department-check" aria-hidden="true">✓</span>
                   </label>
                 ))}
@@ -708,7 +709,7 @@ function InternalLayoutContent({ children }) {
               />
             </div>
 
-            <label className="form-span-all flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+            <label className="staff-login-remember form-span-all flex cursor-pointer items-center gap-2 text-xs text-slate-300">
               <input type="checkbox" checked={rememberProfile} onChange={(event) => setRememberProfile(event.target.checked)} className="h-4 w-4 accent-emerald-600" />
               <span>Ingat profil ini di perangkat saya</span>
             </label>

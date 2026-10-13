@@ -7,6 +7,55 @@ import { BatchContext, candidatesUrl } from '../BatchContext';
 
 const LOGO_LSSD = '/logos/lssd.png';
 const LOGO_LSPD = '/logos/lspd.png';
+const LOGO_DOC = '/logos/doc.png';
+const DECLINED_REASON_OPTIONS = [
+  { label: 'OOC Info (Under 17)', text: 'Out Of Character Information (RL Age under 17)' },
+  { label: 'Below Passing Grade', text: 'Interview score below the minimum passing grade' },
+  { label: 'Expired Revision Time', text: 'Failed to provide required application updates within the allocated time' },
+  { label: 'Criminal Records', text: 'Does not meet qualification standards due to active or disqualifying criminal records' },
+  { label: 'General Qualification', text: 'Does not meet the current qualification standards required for Law Enforcement Officer (LEO)' },
+];
+
+function createDeclinedBbcode(candidate, reason, staffProfile) {
+  const departmentNames = {
+    LSSD: "Los Santos Sheriff's Department",
+    LSPD: 'Los Santos Police Department',
+    SASP: 'San Andreas State Police',
+    DOC: 'Department of Corrections',
+  };
+  const officerDepartment = departmentNames[staffProfile.department] || staffProfile.department;
+  const signature = [
+    staffProfile.name,
+    staffProfile.rank,
+    staffProfile.position,
+    officerDepartment,
+  ]
+    .filter(Boolean).join('\n');
+
+  return `[divbox=white][center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.png[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.png[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
+[center][size=200][b]LAW ENFORCEMENT OFFICER[/b][/size][/center]
+[center][size=100][b]Recruitment and Training Divison[/b][/size][/center]
+[divbox=darkblue][/divbox]
+Dear Mr. ${candidate.nama},
+
+Thank you for participating in the interview stage of the Law Enforcement Officer recruitment process. We appreciate the time and effort you put into your application and your interest in serving the city of Los Santos.
+
+After careful consideration and evaluation of your interview performance, we regret to inform you that your application has been [b][color=#BF0000]DECLINED[/color][/b] at this stage. Unfortunately, your responses did not meet the standards or expectations required to proceed to the academy.
+
+[tab][b]REASON: ${reason}[/b]
+
+Please do not be discouraged. You are welcome to reapply in the next recruitment batch, and we encourage you to take this time to reflect, improve, and better prepare for the next opportunity.
+
+If you would like general feedback or have any questions regarding this outcome, feel free to contact a Recruitment Officer or visit us directly at [b]Alta Station HQ.[/b]
+
+We thank you once again for your interest in joining the department, and we wish you success in your future endeavors.
+
+
+[right]Sincerely,
+${signature || 'Recruitment Staff'}[/right]
+[/divbox]`;
+}
+
 function formatAcademySchedule(batch) {
   const start = new Date(batch?.academy_start || '');
   const end = new Date(batch?.academy_end || '');
@@ -26,6 +75,7 @@ function createAcademyBbcode(candidate, staffProfile, batch) {
   const departmentNames = {
     LSSD: "Los Santos Sheriff's Department",
     LSPD: 'Los Santos Police Department',
+    SASP: 'San Andreas State Police',
     DOC: 'Department of Corrections',
   };
   const officerDepartment = departmentNames[staffProfile.department] || staffProfile.department;
@@ -89,10 +139,9 @@ export default function InterviewPage() {
   const [validationError, setValidationError] = useState('');
   const [stageAccessError, setStageAccessError] = useState('');
   const [academyMessage, setAcademyMessage] = useState('');
-  const [academySuccessOpen, setAcademySuccessOpen] = useState(false);
+  const [declinedReason, setDeclinedReason] = useState('');
   const [staffProfile, setStaffProfile] = useState({ name: '', rank: '', position: '', department: '' });
   const academyPreviewRef = useRef(null);
-  const academyModalPreviewRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -109,15 +158,6 @@ export default function InterviewPage() {
       }).catch(() => {});
     return () => { active = false; };
   }, []);
-
-  useEffect(() => {
-    if (!academySuccessOpen) return undefined;
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setAcademySuccessOpen(false);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [academySuccessOpen]);
 
   const fetchData = async () => {
     const res = await fetch(candidatesUrl(selectedBatch?.id, 'interview'));
@@ -155,7 +195,7 @@ export default function InterviewPage() {
     setSelectedId(cand.id);
     setSelectedCandidateData(cand);
     setAcademyMessage('');
-    setAcademySuccessOpen(false);
+    setDeclinedReason('');
     setForm({
       deptPreference: cand.dept_preference || '',
       interviewerName: cand.interviewer_name || '',
@@ -198,7 +238,7 @@ export default function InterviewPage() {
         status_interview: form.statusInterview,
         notes_interviewer: form.notesInterviewer,
       };
-      setMsg(form.statusInterview === 'Passed' ? '' : data.message);
+      setMsg(form.statusInterview === 'Passed' || form.statusInterview === 'Failed' ? '' : data.message);
       setSelectedCandidateData((candidate) => candidate?.id === selectedId ? {
         ...candidate,
         ...updatedFields,
@@ -209,7 +249,6 @@ export default function InterviewPage() {
       if (form.statusInterview === 'Passed') {
         setQueueTab('completed');
         setCurrentPage(1);
-        setAcademySuccessOpen(true);
       }
       fetchData();
       setTimeout(() => setMsg(''), 3000);
@@ -225,30 +264,34 @@ export default function InterviewPage() {
   const academyBbcode = selectedCand && academyPassed
     ? createAcademyBbcode(selectedCand, staffProfile, selectedBatch)
     : '';
+  const declinedBbcode = selectedCand && form.statusInterview === 'Failed' && declinedReason
+    ? createDeclinedBbcode(selectedCand, declinedReason, staffProfile)
+    : '';
+  const interviewResultBbcode = form.statusInterview === 'Failed' ? declinedBbcode : academyBbcode;
   const updateAcademyTemplateData = (updates) => {
     setForm((current) => ({ ...current, ...updates }));
     setAcademyMessage('');
   };
 
   const copyAcademyBbcode = async (previewRef = academyPreviewRef) => {
-    if (!selectedCand || !academyPassed) return;
+    if (!selectedCand || !interviewResultBbcode) return;
     if (!academyStaffReady) {
       setAcademyMessage('Profil petugas yang login belum tersedia.');
       return;
     }
-    if (!academySchedule.available) {
+    if (form.statusInterview === 'Passed' && !academySchedule.available) {
       setAcademyMessage('Jadwal Academy untuk batch ini belum diatur.');
       return;
     }
     try {
-      await navigator.clipboard.writeText(academyBbcode);
-      setAcademyMessage('Template Academy berhasil disalin.');
+      await navigator.clipboard.writeText(interviewResultBbcode);
+      setAcademyMessage(form.statusInterview === 'Failed' ? 'Template Declined berhasil disalin.' : 'Template Academy berhasil disalin.');
     } catch {
       const preview = previewRef.current;
       preview?.focus();
       preview?.select();
       const copied = preview && document.execCommand('copy');
-      setAcademyMessage(copied ? 'Template Academy berhasil disalin.' : 'Clipboard tidak tersedia. Pilih dan salin kode dari pratinjau.');
+      setAcademyMessage(copied ? (form.statusInterview === 'Failed' ? 'Template Declined berhasil disalin.' : 'Template Academy berhasil disalin.') : 'Clipboard tidak tersedia. Pilih dan salin kode dari pratinjau.');
     }
   };
 
@@ -373,7 +416,7 @@ export default function InterviewPage() {
                     <Image src={LOGO_LSSD} alt="LSSD Logo" width={36} height={36} className="w-9 h-9 object-contain shrink-0" />
                     <div>
                       <div className="font-bold text-xs text-indigo-950">LSSD</div>
-                      <div className="text-[10px] text-slate-500">Minat Sheriff&apos;s Department</div>
+                      <div className="text-[10px] text-slate-500">Sheriff&apos;s Department</div>
                     </div>
                   </button>
 
@@ -389,7 +432,7 @@ export default function InterviewPage() {
                     <Image src={LOGO_LSPD} alt="LSPD Logo" width={36} height={36} className="w-9 h-9 object-contain shrink-0" />
                     <div>
                       <div className="font-bold text-xs text-blue-950">LSPD</div>
-                      <div className="text-[10px] text-slate-500">Minat Police Department</div>
+                      <div className="text-[10px] text-slate-500">Police Department</div>
                     </div>
                   </button>
                   <button
@@ -401,8 +444,8 @@ export default function InterviewPage() {
                         ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500/20 shadow-sm'
                         : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}>
-                    <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-emerald-200 bg-emerald-50 text-[10px] font-extrabold text-emerald-800">DOC</span>
-                    <span><span className="block text-xs font-bold text-emerald-950">DOC</span><span className="block text-[10px] text-slate-500">Minat Department of Corrections</span></span>
+                        <Image src={LOGO_DOC} alt="DOC Logo" width={36} height={36} className="w-9 h-9 object-contain shrink-0" />
+                    <span><span className="block text-xs font-bold text-emerald-950">DOC</span><span className="block text-[10px] text-slate-500">Department of Corrections</span></span>
                   </button>
                 </div>
                 {form.deptPreference && <div className="mt-2 flex flex-wrap items-center gap-2"><span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-500">Referensi minat tersimpan: {form.deptPreference}</span><button type="button" className="text-[10px] font-semibold text-slate-500 underline" onClick={() => updateAcademyTemplateData({ deptPreference: '' })}>Hapus preferensi</button></div>}
@@ -472,11 +515,11 @@ export default function InterviewPage() {
                 <div className="academy-template-heading">
                   <div>
                     <span className="academy-template-kicker">RECRUITMENT &amp; TRAINING</span>
-                    <h3 id="interview-academy-template-title">Template balasan Academy</h3>
-                    <p>Tanggal dan waktu mengikuti jadwal batch aktif. Signature mengikuti profil petugas yang login.</p>
+                    <h3 id="interview-academy-template-title">{form.statusInterview === 'Failed' ? 'Template balasan Declined' : 'Template balasan Academy'}</h3>
+                    <p>{form.statusInterview === 'Failed' ? 'Pilih alasan penolakan. BBCode akan diperbarui otomatis untuk kandidat ini.' : 'Tanggal dan waktu mengikuti jadwal batch aktif. Signature mengikuti profil petugas yang login.'}</p>
                   </div>
-                  <span className={`academy-passed-badge ${academyPassed ? '' : 'is-unavailable'}`}>
-                    {academyPassed ? 'PASSED' : 'MENUNGGU DISIMPAN'}
+                  <span className={form.statusInterview === 'Failed' ? 'rejected-template-badge' : `academy-passed-badge ${academyPassed ? '' : 'is-unavailable'}`}>
+                    {form.statusInterview === 'Failed' ? 'DECLINED' : academyPassed ? 'PASSED' : 'MENUNGGU DISIMPAN'}
                   </span>
                 </div>
 
@@ -493,6 +536,31 @@ export default function InterviewPage() {
                       {academyMessage === 'Template Academy berhasil disalin.' ? 'Tersalin ✓' : 'Salin Kode (Copy BBCode)'}
                     </button>
                   </div>
+                </> : form.statusInterview === 'Failed' ? <>
+                  <label className="academy-preview-label" htmlFor="interview-declined-reason">Reason Declined</label>
+                  <select
+                    id="interview-declined-reason"
+                    className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm font-semibold text-slate-800 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20"
+                    value={DECLINED_REASON_OPTIONS.find((option) => option.text === declinedReason)?.label || ''}
+                    onChange={(event) => {
+                      const selectedReason = DECLINED_REASON_OPTIONS.find((option) => option.label === event.target.value);
+                      setDeclinedReason(selectedReason?.text || '');
+                      setAcademyMessage('');
+                    }}
+                  >
+                    <option value="">Pilih alasan penolakan</option>
+                    {DECLINED_REASON_OPTIONS.map((option) => <option key={option.label} value={option.label}>{option.label}</option>)}
+                  </select>
+                  {declinedReason ? <>
+                    <label className="academy-preview-label" htmlFor="interview-academy-bbcode">Pratinjau BBCode</label>
+                    <textarea ref={academyPreviewRef} id="interview-academy-bbcode" className="academy-bbcode-preview" rows="12" readOnly value={declinedBbcode} />
+                    <div className="academy-template-actions">
+                      <span role="status" aria-live="polite">{academyMessage || 'Nama kandidat, alasan, dan signature petugas dimasukkan otomatis.'}</span>
+                      <button type="button" onClick={copyAcademyBbcode} disabled={!academyStaffReady || !declinedBbcode}>
+                        {academyMessage === 'Template Declined berhasil disalin.' ? 'Tersalin ✓' : 'Salin Kode (Copy BBCode)'}
+                      </button>
+                    </div>
+                  </> : <div className="academy-template-unavailable">Pilih alasan Declined untuk menampilkan template BBCode.</div>}
                 </> : (
                   <div className="academy-template-unavailable">Simpan hasil wawancara dengan status Passed terlebih dahulu untuk membuat template balasan.</div>
                 )}
@@ -503,26 +571,6 @@ export default function InterviewPage() {
 
       </div>
 
-      {academySuccessOpen && selectedCand && academyPassed && <div className="interview-success-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setAcademySuccessOpen(false); }}>
-        <section className="interview-success-modal" role="dialog" aria-modal="true" aria-labelledby="interview-success-title">
-          <div className="interview-success-heading">
-            <span className="interview-success-icon" aria-hidden="true">✓</span>
-            <div>
-              <h2 id="interview-success-title">Hasil wawancara berhasil disimpan</h2>
-              <p>{selectedCand.nama} berstatus Passed. Kode balasan Academy siap disalin.</p>
-            </div>
-            <button type="button" className="interview-success-close" aria-label="Tutup dialog" onClick={() => setAcademySuccessOpen(false)}>×</button>
-          </div>
-          <label className="academy-preview-label" htmlFor="interview-academy-success-bbcode">Kode template Academy</label>
-          <textarea ref={academyModalPreviewRef} id="interview-academy-success-bbcode" className="academy-bbcode-preview interview-success-preview" readOnly value={academyBbcode} />
-          <div className="interview-success-actions">
-            <span role="status" aria-live="polite">{academyMessage || (!academyStaffReady ? 'Memuat profil petugas…' : academySchedule.available ? 'Tersusun otomatis dari kandidat, jadwal Academy, dan signature petugas login.' : 'Jadwal Academy batch ini belum tersedia.')}</span>
-            <button type="button" className="interview-success-copy" onClick={() => copyAcademyBbcode(academyModalPreviewRef)} disabled={!academyStaffReady || !academySchedule.available}>
-              {academyMessage === 'Template Academy berhasil disalin.' ? 'Tersalin ✓' : 'Salin Kode'}
-            </button>
-          </div>
-        </section>
-      </div>}
     </div>
   );
 }

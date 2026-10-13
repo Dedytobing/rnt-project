@@ -1117,3 +1117,85 @@ html[data-theme="dark"] .staff-content .candidate-detail-modal > footer { color:
   .staff-content .candidate-detail-modal > div.grid > section { overflow: visible; }
   .staff-content .candidate-detail-modal > footer { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
+
+/* Staff sign-in: readable helper copy, deliberate spacing, and stable department cards. */
+.staff-login-page { padding: 20px 24px; }
+.staff-login-card .staff-login-back-row { margin: 0 0 2px !important; padding: 4px 2px 2px !important; }
+.staff-login-card .staff-login-back-link { min-height: 40px; padding: 0 15px; font-size: 13px; }
+.staff-login-card .staff-login-helper,
+.staff-login-card .staff-login-department-hint { margin: 5px 0 10px; color: #475569 !important; font-size: 13px !important; font-weight: 500; line-height: 1.5; }
+.staff-login-card .staff-login-remember { min-height: 40px; margin: 0; padding: 4px 2px; color: #334155 !important; font-size: 14px !important; font-weight: 600; line-height: 1.45; }
+.staff-login-card .staff-login-remember input { width: 18px; height: 18px; flex: 0 0 auto; }
+.staff-login-card .staff-login-field > label.block,
+.staff-login-card .staff-login-roles legend,
+.staff-login-card .staff-login-departments legend { color: #334155 !important; font-size: 13px !important; line-height: 1.4; }
+.staff-login-card input:not([type="radio"]):not([type="checkbox"]),
+.staff-login-card select,
+.staff-login-card textarea { color: #111827 !important; }
+.staff-login-card input::placeholder,
+.staff-login-card textarea::placeholder { color: #475569 !important; font-size: 14px !important; opacity: 1; }
+.staff-login-card .staff-login-departments > div { gap: 9px; padding: 0; background: transparent; border: 0; }
+.staff-login-card .staff-login-department { min-width: 0; min-height: 112px; padding: 12px; align-items: flex-start; gap: 9px; border: 1px solid #cbd5e1 !important; border-radius: 10px !important; background: #f8fafc !important; }
+.staff-login-card .staff-login-department:hover { background: #f1f5f9 !important; border-color: #64748b !important; }
+.staff-login-card .staff-login-department.selected { background: #f0fdf4 !important; border: 2px solid #315842 !important; box-shadow: 0 0 0 2px #31584220 !important; }
+.staff-login-card .staff-login-department .staff-department-logo { width: 36px; height: 36px; padding: 3px; flex: 0 0 36px; }
+.staff-login-card .staff-login-department .staff-department-logo img { width: 28px; height: 28px; }
+.staff-login-card .staff-login-department .staff-department-copy { min-width: 0; flex: 1 1 0; overflow-wrap: anywhere; }
+.staff-login-card .staff-login-department .staff-department-copy strong { color: #111827 !important; font-size: 14px !important; font-weight: 800; line-height: 1.3; }
+.staff-login-card .staff-login-department .staff-department-copy small { margin-top: 4px; color: #475569 !important; font-size: 12px !important; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+.staff-login-card .staff-login-department .staff-department-check { margin-left: auto; flex: 0 0 18px; width: 18px; height: 18px; }
+.staff-login-card .staff-login-role { min-height: 58px; padding: 10px 32px 10px 12px; }
+.staff-login-card .staff-login-role strong { font-size: 14px !important; font-weight: 750; }
+.staff-login-card .staff-login-role small { color: #475569 !important; font-size: 12px !important; line-height: 1.4; }
+html[data-theme="dark"] .staff-login-card .staff-login-helper,
+html[data-theme="dark"] .staff-login-card .staff-login-department-hint,
+html[data-theme="dark"] .staff-login-card .staff-login-remember,
+html[data-theme="dark"] .staff-login-card .staff-login-field > label.block,
+html[data-theme="dark"] .staff-login-card .staff-login-roles legend,
+html[data-theme="dark"] .staff-login-card .staff-login-departments legend { color: #d1d5db !important; }
+html[data-theme="dark"] .staff-login-card input:not([type="radio"]):not([type="checkbox"]),
+html[data-theme="dark"] .staff-login-card select,
+html[data-theme="dark"] .staff-login-card textarea { color: #f3f4f6 !important; background: #111914 !important; border-color: #647568 !important; }
+html[data-theme="dark"] .staff-login-card input::placeholder,
+html[data-theme="dark"] .staff-login-card textarea::placeholder { color: #cbd5e1 !important; }
+html[data-theme="dark"] .staff-login-card .staff-login-department { background: #111914 !important; border-color: #526457 !important; }
+html[data-theme="dark"] .staff-login-card .staff-login-department:hover { background: #172a20 !important; border-color: #9bb5a0 !important; }
+html[data-theme="dark"] .staff-login-card .staff-login-department.selected { background: #1e3a2b !important; border-color: #4ade80 !important; box-shadow: 0 0 0 2px #22c55e20 !important; }
+html[data-theme="dark"] .staff-login-card .staff-login-department .staff-department-copy strong { color: #f3f4f6 !important; }
+html[data-theme="dark"] .staff-login-card .staff-login-department .staff-department-copy small,
+html[data-theme="dark"] .staff-login-card .staff-login-role small { color: #d1d5db !important; }
+html[data-theme="dark"] .staff-login-card .staff-login-role { background: #111914 !important; border-color: #526457 !important; }
+html[data-theme="dark"] .staff-login-card .staff-login-role:hover { background: #172a20 !important; border-color: #9bb5a0 !important; }
+html[data-theme="dark"] .staff-login-card .staff-login-role.selected { background: #1e3a2b !important; border-color: #4ade80 !important; }
+@media (max-width: 560px) {
+  .staff-login-page { padding: 14px; }
+  .staff-login-card { padding: 20px 16px !important; }
+  .staff-login-card .staff-login-departments > div { gap: 8px; }
+  .staff-login-card .staff-login-department { min-height: 88px; padding: 11px; }
+}
+
+/* Keep department title, helper, and compact choices visually grouped. */
+.staff-login-card .staff-login-departments legend { margin: 0 0 2px !important; }
+.staff-login-card .staff-login-helper,
+.staff-login-card .staff-login-department-hint { margin: 0 0 7px !important; color: #475569 !important; font-size: 12px !important; font-weight: 500; line-height: 1.45; }
+.staff-login-card .staff-login-heading > div > p,
+.staff-login-card .staff-login-footer { color: #475569 !important; font-size: 12px !important; line-height: 1.45; }
+.staff-login-card .staff-login-field > label.block,
+.staff-login-card .staff-login-roles legend,
+.staff-login-card .staff-login-departments legend { font-size: 14px !important; font-weight: 600 !important; line-height: 1.4; }
+.staff-login-card .staff-login-departments > div { gap: 8px; }
+.staff-login-card .staff-login-department { min-height: 60px; padding: 10px 12px; align-items: center; gap: 10px; }
+.staff-login-card .staff-login-department .staff-department-logo { width: 34px; height: 34px; padding: 2px; flex: 0 0 34px; }
+.staff-login-card .staff-login-department .staff-department-logo img { width: 28px; height: 28px; }
+.staff-login-card .staff-login-department .staff-department-copy { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; }
+.staff-login-card .staff-login-department .staff-department-copy strong { font-size: 14px !important; font-weight: 600; letter-spacing: .04em; }
+.staff-login-card .staff-login-department .staff-department-copy small { display: none !important; }
+.staff-login-card .staff-login-department .staff-department-check { margin-left: auto; flex: 0 0 18px; width: 18px; height: 18px; }
+html[data-theme="dark"] .staff-login-card .staff-login-helper,
+html[data-theme="dark"] .staff-login-card .staff-login-department-hint,
+html[data-theme="dark"] .staff-login-card .staff-login-heading > div > p,
+html[data-theme="dark"] .staff-login-card .staff-login-footer { color: #cbd5e1 !important; }
+@media (max-width: 560px) {
+  .staff-login-card .staff-login-departments > div { gap: 7px; }
+  .staff-login-card .staff-login-department { min-height: 56px; padding: 9px 11px; }
+}

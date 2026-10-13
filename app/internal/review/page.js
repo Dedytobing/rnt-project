@@ -18,7 +18,6 @@ const PENDING_REASON_OPTIONS = [
     label: 'HAVING A CRIMINAL RECORD NEEDS TO DO EXPUNGEMENT AT THE DEPARTMENT OF JUSTICE',
   },
 ];
-
 function formatInterviewSchedule(batch) {
   const start = new Date(batch?.interview_start || '');
   const end = new Date(batch?.interview_end || '');
@@ -50,9 +49,12 @@ function createPendingBbcode(candidate, reasons, customReason, staffProfile) {
   ];
   const salutation = candidate.gender === 'Female' ? 'Ms.' : 'Mr.';
   const reasonList = selectedReasons.map((reason) => `[*] ${reason}`).join('\n');
-  const departmentName = staffProfile.department === 'LSSD'
-    ? 'Los Santos Sheriff Department'
-    : 'Los Santos Police Department';
+  const departmentNames = {
+    LSSD: "Los Santos Sheriff's Department",
+    LSPD: 'Los Santos Police Department',
+    SASP: 'San Andreas State Police',
+  };
+  const departmentName = departmentNames[staffProfile.department] || staffProfile.department || 'Los Santos Police Department';
   const signature = [
     staffProfile.name,
     staffProfile.rank,
@@ -85,21 +87,20 @@ ${signature || 'Recruitment Staff'}[/right]
 }
 
 function createRejectedBbcode(candidate, staffProfile) {
-  const salutation = candidate.gender === 'Female' ? 'Ms.' : 'Mr.';
-  const departmentName = staffProfile.department === 'LSSD'
-    ? 'Los Santos Sheriff Department'
-    : 'Los Santos Police Department';
-  const signature = [
-    staffProfile.name,
-    staffProfile.rank,
-    staffProfile.position,
-    departmentName,
-  ].filter(Boolean).join('\n');
+  const salutation = candidate.gender === 'Female' ? 'Mrs.' : 'Mr.';
+  const departmentNames = {
+    LSSD: "Los Santos Sheriff's Department",
+    LSPD: 'Los Santos Police Department',
+    SASP: 'San Andreas State Police',
+    DOC: 'Department of Corrections',
+  };
+  const departmentName = departmentNames[staffProfile.department] || staffProfile.department || 'Recruitment and Training Division';
+  const staffTitle = [staffProfile.rank, staffProfile.position].filter(Boolean).join(' · ') || 'Recruitment Staff';
 
   return `[divbox=white]
 [center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.png[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.png[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
 [center][size=200][b]LAW ENFORCEMENT OFFICER[/b][/size][/center]
-[center][size=100][b]Recruitment and Training Division[/b][/size][/center]
+[center][size=100][b]Recruitment and Training Divison[/b][/size][/center]
 [divbox=darkblue][/divbox]
 Dear ${salutation} ${candidate.nama},
 
@@ -107,20 +108,26 @@ Thank you for taking the time to submit your application to the Law Enforcement 
 
 Unfortunately, it did not meet one or more of the required criteria to proceed further in the recruitment process. This may include incomplete information, failure to meet the writing standards, or other eligibility concerns.
 
-You are welcome to fix your pending application, once all necessary corrections or improvements have been made. We appreciate your interest in joining the department and encourage you to use this as a learning experience for future opportunities.
+You are welcome to reapply during the next recruitment batch, once all necessary corrections or improvements have been made. We appreciate your interest in joining the department and encourage you to use this as a learning experience for future opportunities.
 
 Should you have any questions regarding the reason for this decision, feel free to reach out to a member of the Recruitment Division for clarification.
 
-[right]Sincerely,  
-${signature || 'Recruitment Staff'}[/right]
+
+[right]Sincerely,
+${staffProfile.name || 'Recruitment Staff'}
+${staffTitle}
+${departmentName}[/right]
 [/divbox]`;
 }
 
 function createAcceptedBbcode(candidate, staffProfile, interviewSchedule) {
   const salutation = candidate.gender === 'Female' ? 'Ms.' : 'Mr.';
-  const departmentName = staffProfile.department === 'LSSD'
-    ? 'Los Santos Sheriff Department'
-    : 'Los Santos Police Department';
+  const departmentNames = {
+    LSSD: "Los Santos Sheriff's Department",
+    LSPD: 'Los Santos Police Department',
+    SASP: 'San Andreas State Police',
+  };
+  const departmentName = departmentNames[staffProfile.department] || staffProfile.department || 'Los Santos Police Department';
   const signature = [
     staffProfile.name,
     staffProfile.rank,
@@ -179,10 +186,7 @@ export default function ReviewPage() {
   const [staffProfile, setStaffProfile] = useState({ name: '', rank: '', position: '', department: '' });
   const [copyMessage, setCopyMessage] = useState('');
   const [stageAccessError, setStageAccessError] = useState('');
-  const [reviewSuccessOpen, setReviewSuccessOpen] = useState(false);
-  const [reviewSuccessLabel, setReviewSuccessLabel] = useState('');
   const reviewPreviewRef = useRef(null);
-  const reviewModalPreviewRef = useRef(null);
 
   useEffect(() => {
     fetch('/api/internal/session')
@@ -199,15 +203,6 @@ export default function ReviewPage() {
       })
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (!reviewSuccessOpen) return undefined;
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setReviewSuccessOpen(false);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [reviewSuccessOpen]);
 
   useEffect(() => {
     let active = true;
@@ -242,6 +237,7 @@ export default function ReviewPage() {
     const isActiveReview = activeReviewIds.has(c.id);
     let matchMode = false;
     if (viewMode === 'ACCEPTED') matchMode = c.status_cv === 'Interview';
+    else if (viewMode === 'REJECTED') matchMode = c.status_cv === 'Rejected';
     else if (!isActiveReview) matchMode = false;
     else if (viewMode === 'NEW') matchMode = !c.status_cv || c.status_cv === '';
     else if (viewMode === 'PENDING') matchMode = c.status_cv === 'Pending';
@@ -253,7 +249,6 @@ export default function ReviewPage() {
   const handleSelect = (cand) => {
     setSelectedId(cand.id);
     setSelectedCandidateData(cand);
-    setReviewSuccessOpen(false);
     setValidationError('');
     setCopyMessage('');
     setForm({ 
@@ -308,11 +303,9 @@ export default function ReviewPage() {
       const updatedCandidate = { ...selectedCandidateData, ...form, status_cv: form.statusCv, mdt_check: form.mdtCheck, notes_investigator: form.notesInvestigator };
       setSelectedCandidateData(updatedCandidate);
       setCandidates((current) => current.map((candidate) => candidate.id === selectedId ? { ...candidate, ...updatedCandidate } : candidate));
-      setViewMode(form.statusCv === 'Pending' ? 'PENDING' : form.statusCv === 'Interview' ? 'ACCEPTED' : 'NEW');
+      setViewMode(form.statusCv === 'Pending' ? 'PENDING' : form.statusCv === 'Interview' ? 'ACCEPTED' : form.statusCv === 'Rejected' ? 'REJECTED' : 'NEW');
       setCurrentPage(1);
       setCopyMessage('');
-      setReviewSuccessLabel(form.statusCv === 'Pending' ? 'Pending' : form.statusCv === 'Rejected' ? 'Rejected' : 'Accepted');
-      setReviewSuccessOpen(true);
       setMsg('');
       fetchData();
       setTimeout(() => setMsg(''), 3000);
@@ -366,7 +359,7 @@ export default function ReviewPage() {
   const copyRejectedBbcode = (previewRef = reviewPreviewRef) => copyBbcode(rejectedBbcode, 'BBCode Rejected berhasil disalin.', previewRef);
   const copyAcceptedBbcode = (previewRef = reviewPreviewRef) => copyBbcode(acceptedBbcode, 'BBCode Accepted berhasil disalin.', previewRef);
   const reviewBbcode = form.statusCv === 'Pending' ? pendingBbcode : form.statusCv === 'Rejected' ? rejectedBbcode : acceptedBbcode;
-  const copyReviewBbcode = (previewRef) => {
+  const copyReviewBbcode = (previewRef = reviewPreviewRef) => {
     if (form.statusCv === 'Pending') return copyPendingBbcode(previewRef);
     if (form.statusCv === 'Rejected') return copyRejectedBbcode(previewRef);
     return copyAcceptedBbcode(previewRef);
@@ -374,6 +367,7 @@ export default function ReviewPage() {
 
   const countNew = activeReviewCandidates.filter(c => !c.status_cv || c.status_cv === '').length;
   const countPending = activeReviewCandidates.filter(c => c.status_cv === 'Pending').length;
+  const countRejected = candidates.filter(c => c.status_cv === 'Rejected').length;
   const countAccepted = candidates.filter(c => c.status_cv === 'Interview').length;
 
   return (
@@ -394,7 +388,7 @@ export default function ReviewPage() {
                 ? 'bg-white text-emerald-800 shadow-md shadow-slate-200 ring-1 ring-black/5'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-300/50'
             }`}
-            onClick={() => { setViewMode('NEW'); setSelectedId(''); setSelectedCandidateData(null); setReviewSuccessOpen(false); setValidationError(''); setCurrentPage(1); }}>
+            onClick={() => { setViewMode('NEW'); setSelectedId(''); setSelectedCandidateData(null); setValidationError(''); setCurrentPage(1); }}>
               <span>Belum Direview</span>
             <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
               viewMode === 'NEW' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-300 text-slate-700'
@@ -410,7 +404,7 @@ export default function ReviewPage() {
                 ? 'bg-white text-amber-700 shadow-md shadow-slate-200 ring-1 ring-black/5' 
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-300/50'
             }`}
-            onClick={() => { setViewMode('PENDING'); setSelectedId(''); setSelectedCandidateData(null); setReviewSuccessOpen(false); setValidationError(''); setCurrentPage(1); }}>
+            onClick={() => { setViewMode('PENDING'); setSelectedId(''); setSelectedCandidateData(null); setValidationError(''); setCurrentPage(1); }}>
             <span>Pending</span>
             <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
               viewMode === 'PENDING' ? 'bg-amber-100 text-amber-800' : 'bg-slate-300 text-slate-700'
@@ -422,11 +416,25 @@ export default function ReviewPage() {
           <button
             type="button"
             className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all ${
+              viewMode === 'REJECTED'
+                ? 'bg-white text-rose-700 shadow-md shadow-slate-200 ring-1 ring-black/5'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-300/50'
+            }`}
+            onClick={() => { setViewMode('REJECTED'); setSelectedId(''); setSelectedCandidateData(null); setValidationError(''); setCurrentPage(1); }}>
+            <span>CV Ditolak</span>
+            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${viewMode === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-slate-300 text-slate-700'}`}>
+              {countRejected}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all ${
               viewMode === 'ACCEPTED'
                 ? 'bg-white text-emerald-700 shadow-md shadow-slate-200 ring-1 ring-black/5'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-300/50'
             }`}
-            onClick={() => { setViewMode('ACCEPTED'); setSelectedId(''); setSelectedCandidateData(null); setReviewSuccessOpen(false); setValidationError(''); setCurrentPage(1); }}>
+            onClick={() => { setViewMode('ACCEPTED'); setSelectedId(''); setSelectedCandidateData(null); setValidationError(''); setCurrentPage(1); }}>
             <span>CV Diterima</span>
             <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
               viewMode === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-300 text-slate-700'
@@ -449,7 +457,7 @@ export default function ReviewPage() {
         {/* PANEL KIRI */}
         <div className="col-span-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
           <div className="font-bold text-xs text-slate-600 uppercase tracking-wider border-b border-slate-100 pb-2">
-            Daftar {viewMode === 'NEW' ? 'Belum Direview' : viewMode === 'PENDING' ? 'Pending' : 'CV Diterima'} ({displayedCandidates.length})
+            Daftar {viewMode === 'NEW' ? 'Belum Direview' : viewMode === 'PENDING' ? 'Pending' : viewMode === 'REJECTED' ? 'CV Ditolak' : 'CV Diterima'} ({displayedCandidates.length})
           </div>
 
           <input 
@@ -480,7 +488,7 @@ export default function ReviewPage() {
                       c.status_cv === 'Rejected' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
                       'bg-emerald-100 text-emerald-800 border border-emerald-300'
                     }`}>
-                      {c.status_cv || 'Baru'}
+                      {c.status_cv === 'Rejected' ? 'CV Ditolak' : c.status_cv || 'Baru'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-[11px] text-slate-500">
@@ -545,7 +553,7 @@ export default function ReviewPage() {
                     <option value="" disabled>Pilih status CV</option>
                     <option value="Interview" className="text-emerald-700 bg-white font-bold py-1">🟢 Lolos Review CV (lanjut Interview)</option>
                     <option value="Pending" className="text-amber-700 bg-white font-bold py-1">🟡 Pending (Tunda Penilaian)</option>
-                    <option value="Rejected" className="text-rose-700 bg-white font-bold py-1">🔴 Rejected (Ditolak)</option>
+                    <option value="Rejected" className="text-rose-700 bg-white font-bold py-1">🔴 CV Ditolak (Rejected)</option>
                   </select>
                 </div>
 
@@ -567,131 +575,6 @@ export default function ReviewPage() {
                   </select>
                 </div>
               </div>
-
-              {form.statusCv === 'Pending' && (
-                <section className="pending-template-card" aria-labelledby="pending-template-title">
-                  <div className="pending-template-heading">
-                    <div>
-                      <h3 id="pending-template-title">Template balasan Pending</h3>
-                      <p>Pilih alasan yang sesuai untuk kandidat ini. Template akan dirangkai otomatis dalam BBCode.</p>
-                    </div>
-                    <span className="pending-template-badge">PENDING</span>
-                  </div>
-
-                  <div className="pending-reason-list">
-                    {PENDING_REASON_OPTIONS.map((reason) => (
-                      <label key={reason.id} className="pending-reason-option">
-                        <input
-                          type="checkbox"
-                          checked={selectedPendingReasons.includes(reason.id)}
-                          onChange={() => togglePendingReason(reason.id)}
-                        />
-                        <span>{reason.label}</span>
-                      </label>
-                    ))}
-                  </div>
-
-                  <label className="pending-custom-reason-label" htmlFor="pending-custom-reason">Alasan khusus kandidat (opsional, satu alasan per baris)</label>
-                  <textarea
-                    id="pending-custom-reason"
-                    rows="2"
-                    value={selectedCustomPendingReason}
-                    onChange={(event) => {
-                      if (!selectedCand) return;
-                      setCustomPendingReasonByCandidate((current) => ({ ...current, [selectedCand.id]: event.target.value }));
-                      setValidationError('');
-                      setCopyMessage('');
-                    }}
-                    placeholder="Tuliskan alasan spesifik lain untuk kandidat ini..."
-                  />
-
-                  <label className="pending-bbcode-label" htmlFor="pending-bbcode-preview">Pratinjau BBCode</label>
-                  <textarea
-                    ref={reviewPreviewRef}
-                    id="pending-bbcode-preview"
-                    className="pending-bbcode-preview"
-                    rows="12"
-                    readOnly
-                    value={pendingBbcode}
-                  />
-                  <div className="pending-template-actions">
-                    <span role="status" aria-live="polite">{copyMessage || (hasPendingReasons ? 'Nama kandidat dan staff dimasukkan otomatis.' : 'Pilih minimal satu alasan sebelum menyalin.')}</span>
-                    <button type="button" onClick={copyPendingBbcode} disabled={!hasPendingReasons}>
-                      {copyMessage === 'BBCode Pending berhasil disalin.' ? 'Tersalin ✓' : 'Salin BBCode'}
-                    </button>
-                  </div>
-                </section>
-              )}
-
-              {form.statusCv === 'Interview' && (
-                <section className="pending-template-card" aria-labelledby="accepted-template-title">
-                  <div className="pending-template-heading">
-                    <div>
-                      <h3 id="accepted-template-title">Template balasan Accepted</h3>
-                      <p>Surat lolos review CV dengan jadwal wawancara dari konfigurasi batch aktif.</p>
-                    </div>
-                    <span className="accepted-template-badge">ACCEPTED</span>
-                  </div>
-
-                  <div className="accepted-interview-details" aria-live="polite">
-                    <div>
-                      <span>Tanggal wawancara</span>
-                      <strong>{interviewSchedule.date}</strong>
-                    </div>
-                    <div>
-                      <span>Waktu wawancara (WIB)</span>
-                      <strong>{interviewSchedule.time}</strong>
-                    </div>
-                    <div className="accepted-interview-location">
-                      <span>Lokasi wawancara</span>
-                      <strong>ALTA POLICE STATION</strong>
-                    </div>
-                  </div>
-
-                  <label className="pending-bbcode-label" htmlFor="accepted-bbcode-preview">Pratinjau BBCode</label>
-                  <textarea
-                    ref={reviewPreviewRef}
-                    id="accepted-bbcode-preview"
-                    className="pending-bbcode-preview"
-                    rows="12"
-                    readOnly
-                    value={acceptedBbcode}
-                  />
-                  <div className="pending-template-actions">
-                    <span role="status" aria-live="polite">{copyMessage || (interviewSchedule.available ? 'Nama kandidat, jadwal batch, dan tanda tangan dimasukkan otomatis.' : 'Jadwal wawancara batch aktif belum dikonfigurasi.')}</span>
-                    <button type="button" onClick={copyAcceptedBbcode} disabled={!interviewSchedule.available}>
-                      {copyMessage === 'BBCode Accepted berhasil disalin.' ? 'Tersalin ✓' : 'Salin BBCode'}
-                    </button>
-                  </div>
-                </section>
-              )}
-
-              {form.statusCv === 'Rejected' && (
-                <section className="pending-template-card" aria-labelledby="rejected-template-title">
-                  <div className="pending-template-heading">
-                    <div>
-                      <h3 id="rejected-template-title">Template balasan Rejected</h3>
-                      <p>Pratinjau balasan resmi. Nama kandidat dan tanda tangan mengikuti data sesi yang sedang login.</p>
-                    </div>
-                    <span className="rejected-template-badge">REJECTED</span>
-                  </div>
-                  <label className="pending-bbcode-label" htmlFor="rejected-bbcode-preview">Pratinjau BBCode</label>
-                  <textarea
-                    ref={reviewPreviewRef}
-                    id="rejected-bbcode-preview"
-                    className="pending-bbcode-preview"
-                    rows="12"
-                    readOnly
-                    value={rejectedBbcode}
-                  />
-                  <div className="pending-template-actions">
-                    <span role="status" aria-live="polite">{copyMessage || 'Template siap disalin.'}</span>
-                    <button type="button" onClick={copyRejectedBbcode}>
-                      {copyMessage === 'BBCode Rejected berhasil disalin.' ? 'Tersalin ✓' : 'Salin BBCode'}
-                    </button>
-                  </div>
-                </section>
-              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -737,32 +620,63 @@ export default function ReviewPage() {
                 className="w-full bg-emerald-700 text-white py-3 rounded-lg font-bold text-sm hover:bg-emerald-800 disabled:bg-slate-300 transition shadow-md shadow-emerald-900/15">
                 {loading ? 'Menyimpan...' : 'Simpan Evaluasi CV'}
               </button>
+
+              <section className="pending-template-card" aria-labelledby="review-template-title">
+                <div className="pending-template-heading">
+                  <div>
+                    <h3 id="review-template-title">Pratinjau BBCode{form.statusCv ? ` · ${form.statusCv === 'Interview' ? 'Accepted' : form.statusCv === 'Rejected' ? 'Declined' : form.statusCv}` : ''}</h3>
+                    <p>{form.statusCv ? 'Template hasil evaluasi tersusun otomatis dari data kandidat dan profil petugas.' : 'Pilih status CV untuk menyiapkan template hasil evaluasi.'}</p>
+                  </div>
+                  <span className={form.statusCv === 'Pending' ? 'pending-template-badge' : form.statusCv === 'Interview' ? 'accepted-template-badge' : form.statusCv === 'Rejected' ? 'rejected-template-badge' : 'pending-template-badge'}>
+                    {form.statusCv === 'Interview' ? 'ACCEPTED' : form.statusCv === 'Rejected' ? 'DECLINED' : form.statusCv === 'Pending' ? 'PENDING' : 'BELUM DIPILIH'}
+                  </span>
+                </div>
+
+                {form.statusCv === 'Pending' && <>
+                  <div className="pending-reason-list">
+                    {PENDING_REASON_OPTIONS.map((reason) => (
+                      <label key={reason.id} className="pending-reason-option">
+                        <input type="checkbox" checked={selectedPendingReasons.includes(reason.id)} onChange={() => togglePendingReason(reason.id)} />
+                        <span>{reason.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <label className="pending-custom-reason-label" htmlFor="pending-custom-reason">Alasan khusus kandidat (opsional, satu alasan per baris)</label>
+                  <textarea
+                    id="pending-custom-reason"
+                    rows="2"
+                    value={selectedCustomPendingReason}
+                    onChange={(event) => {
+                      if (!selectedCand) return;
+                      setCustomPendingReasonByCandidate((current) => ({ ...current, [selectedCand.id]: event.target.value }));
+                      setValidationError('');
+                      setCopyMessage('');
+                    }}
+                    placeholder="Tuliskan alasan spesifik lain untuk kandidat ini..."
+                  />
+                </>}
+
+                {form.statusCv === 'Interview' && <div className="accepted-interview-details" aria-live="polite">
+                  <div><span>Tanggal wawancara</span><strong>{interviewSchedule.date}</strong></div>
+                  <div><span>Waktu wawancara (WIB)</span><strong>{interviewSchedule.time}</strong></div>
+                  <div className="accepted-interview-location"><span>Lokasi wawancara</span><strong>ALTA POLICE STATION</strong></div>
+                </div>}
+
+                <label className="pending-bbcode-label" htmlFor="review-bbcode-preview">Pratinjau BBCode</label>
+                <textarea ref={reviewPreviewRef} id="review-bbcode-preview" className="pending-bbcode-preview" rows="12" readOnly value={reviewBbcode} />
+                <div className="pending-template-actions">
+                  <span role="status" aria-live="polite">{copyMessage || (!form.statusCv ? 'Pilih status CV untuk menampilkan template.' : form.statusCv === 'Pending' ? (hasPendingReasons ? 'Nama kandidat dan staff dimasukkan otomatis.' : 'Pilih minimal satu alasan sebelum menyalin.') : form.statusCv === 'Rejected' ? 'Nama kandidat, jabatan, dan departemen staf dimasukkan otomatis.' : (interviewSchedule.available ? 'Nama kandidat, jadwal, dan signature petugas dimasukkan otomatis.' : 'Jadwal wawancara batch aktif belum dikonfigurasi.'))}</span>
+                  <button type="button" onClick={() => copyReviewBbcode(reviewPreviewRef)} disabled={!reviewBbcode || (form.statusCv === 'Pending' && !hasPendingReasons) || (form.statusCv === 'Interview' && !interviewSchedule.available)}>
+                    {copyMessage.includes('berhasil disalin') ? 'Tersalin ✓' : 'Salin Kode (Copy BBCode)'}
+                  </button>
+                </div>
+              </section>
             </form>
           )}
         </div>
 
       </div>
 
-      {reviewSuccessOpen && selectedCand && <div className="interview-success-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setReviewSuccessOpen(false); }}>
-        <section className="interview-success-modal review-success-modal" role="dialog" aria-modal="true" aria-labelledby="review-success-title">
-          <div className="interview-success-heading">
-            <span className="interview-success-icon" aria-hidden="true">✓</span>
-            <div>
-              <h2 id="review-success-title">Evaluasi CV berhasil disimpan</h2>
-              <p>{selectedCand.nama} · Status {reviewSuccessLabel}. Kode balasan siap disalin.</p>
-            </div>
-            <button type="button" className="interview-success-close" aria-label="Tutup dialog" onClick={() => setReviewSuccessOpen(false)}>×</button>
-          </div>
-          <label className="pending-bbcode-label" htmlFor="review-success-bbcode">Kode template {reviewSuccessLabel}</label>
-          <textarea ref={reviewModalPreviewRef} id="review-success-bbcode" className="pending-bbcode-preview interview-success-preview" readOnly value={reviewBbcode} />
-          <div className="interview-success-actions">
-            <span role="status" aria-live="polite">{copyMessage || 'Nama kandidat dan signature petugas dimasukkan otomatis.'}</span>
-            <button type="button" className="interview-success-copy" onClick={() => copyReviewBbcode(reviewModalPreviewRef)} disabled={!reviewBbcode || (form.statusCv === 'Pending' && !hasPendingReasons) || (form.statusCv === 'Interview' && !interviewSchedule.available)}>
-              {copyMessage.includes('berhasil disalin') ? 'Tersalin ✓' : 'Salin Kode'}
-            </button>
-          </div>
-        </section>
-      </div>}
     </div>
   );
 }

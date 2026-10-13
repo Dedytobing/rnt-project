@@ -14,7 +14,7 @@ const departmentAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('SET_CANDIDATE_DEPARTMENTS_FROM_PREFERENCE'), candidateIds: z.array(z.string().min(1).max(100)).min(1).max(500), batchId: z.uuid() }).strict(),
 ]);
 const personnelAction = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('SAVE_PERSONNEL'), personnelId: z.uuid(), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']), rank: z.string().trim().min(2).max(60), position: z.string().trim().max(100), department: z.enum(['LSPD', 'LSSD']) }).strict(),
+  z.object({ action: z.literal('SAVE_PERSONNEL'), personnelId: z.uuid(), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']), rank: z.string().trim().min(2).max(60), position: z.string().trim().max(100), department: z.enum(['LSPD', 'LSSD', 'SASP']) }).strict(),
   z.object({ action: z.literal('DELETE_PERSONNEL'), personnelId: z.uuid() }).strict(),
   z.object({ action: z.literal('ADD_WHITELIST'), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']) }).strict(),
   z.object({ action: z.literal('BULK_WHITELIST'), entries: z.array(z.object({ fullName: z.string().trim().min(2).max(120), role: z.enum(['STAFF', 'ADMIN']) }).strict()).min(1).max(1000) }).strict(),
