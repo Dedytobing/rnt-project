@@ -163,6 +163,7 @@ function InternalLayoutContent({ children }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+  const initialPathnameRef = useRef(pathname);
   useEffect(() => {
     if (!roleToast) return undefined;
     const timer = window.setTimeout(() => setRoleToast(null), 4000);
@@ -222,7 +223,7 @@ function InternalLayoutContent({ children }) {
           sessionStorage.setItem('officer_session', data.officerName);
           sessionStorage.setItem('officer_role', data.userRole);
           setSelectedBatchId('');
-          setShowBatchPicker(true);
+          setShowBatchPicker(initialPathnameRef.current === '/internal/select-batch');
           setPinVerified(false);
         } else if (data.pinVerified) {
           const profile = {
@@ -723,6 +724,10 @@ function InternalLayoutContent({ children }) {
         </div>
       </div>
     );
+  }
+
+  if (/^\/internal\/[^/]+\/[^/]+$/.test(pathname) && !showBatchPicker && (batchLoading || !selectedBatch)) {
+    return <div className="min-h-screen bg-[#f3f5f2] flex items-center justify-center"><p className="text-sm text-slate-500">Memulihkan halaman portal…</p></div>;
   }
 
   if (batchLoading || pathname === '/internal/select-batch' || !selectedBatch || showBatchPicker) {

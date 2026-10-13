@@ -37,7 +37,7 @@ function displayStaffFirstNames(value) {
     .map((name) => name.trim().split(/\s+/)[0])
     .filter(Boolean)
     .map((name) => `${name.charAt(0).toLocaleUpperCase('id-ID')}${name.slice(1).toLocaleLowerCase('id-ID')}`)
-    .join(', ') || '-';
+    .join(', ') || '—';
 }
 
 const recruitmentStages = [
@@ -362,21 +362,21 @@ export default function InternalDashboard() {
           <table className="dashboard-candidate-table w-full text-center border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
-                <th className="p-3">Nama Kandidat</th>
-                <th className="p-3">Gender</th>
-                <th className="p-3">Status CV</th>
-                <th className="p-3">MDT Check</th>
-                <th className="p-3">Dept Final</th>
-                <th className="p-3">Reviewer CV</th>
-                <th className="p-3">Interviewer</th>
-                <th className="p-3">Status Interview</th>
+                <th className="p-3 text-left align-middle">Nama Kandidat</th>
+                <th className="p-3 text-center align-middle">Gender</th>
+                <th className="p-3 text-center align-middle">Status CV</th>
+                <th className="p-3 text-center align-middle">MDT Check</th>
+                <th className="p-3 text-center align-middle">Status Interview</th>
+                <th className="p-3 text-center align-middle">Reviewer CV</th>
+                <th className="p-3 text-center align-middle">Interviewer</th>
+                <th className="p-3 text-center align-middle">Dept Final</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="8" className="text-center p-6 text-slate-400">Memuat data rekap...</td></tr>
+                <tr className="align-middle"><td colSpan="8" className="p-6 text-center align-middle text-slate-400">Memuat data rekap...</td></tr>
               ) : paginatedCandidates.length === 0 ? (
-                <tr><td colSpan="8" className="text-center p-6 text-slate-400">Tidak ada kandidat yang cocok.</td></tr>
+                <tr className="align-middle"><td colSpan="8" className="p-6 text-center align-middle text-slate-400">Tidak ada kandidat yang cocok.</td></tr>
               ) : (
                 paginatedCandidates.map(c => {
                   const statusDisplay = !c.status_cv ? 'Antrean Baru' : c.status_cv === 'Interview' ? 'Lolos Review CV' : c.status_cv;
@@ -385,10 +385,10 @@ export default function InternalDashboard() {
                     ? 'Belum Interview'
                     : c.status_interview || 'Belum Diputuskan';
                   return (
-                    <tr key={c.id} className="dashboard-candidate-row border-b border-slate-100 hover:bg-slate-50/80 transition">
-                      <td className="p-3 font-bold text-slate-800"><button type="button" title={c.nama} onClick={() => setDetailCandidate(c)} aria-haspopup="dialog" className="text-center text-slate-800 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">{c.nama}</button></td>
-                      <td className="p-3 text-slate-600">{c.gender}</td>
-                      <td className="p-3">
+                    <tr key={c.id} className="dashboard-candidate-row align-middle border-b border-slate-100 hover:bg-slate-50/80 transition">
+                      <td className="p-3 align-middle text-left font-bold text-slate-800"><button type="button" title={c.nama} onClick={() => setDetailCandidate(c)} aria-haspopup="dialog" className="text-left text-slate-800 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">{c.nama}</button></td>
+                      <td className="p-3 align-middle text-center text-slate-600">{c.gender || '—'}</td>
+                      <td className="p-3 align-middle text-center">
                         <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
                           c.status_cv === 'Interview' ? 'bg-indigo-100 text-indigo-800 border border-indigo-300' :
                           c.status_cv === 'Pending' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
@@ -398,24 +398,24 @@ export default function InternalDashboard() {
                           {statusDisplay}
                         </span>
                       </td>
-                      <td className="p-3 font-semibold">
+                      <td className="p-3 align-middle text-center font-semibold">
                         {mdtStatus ? (
                           <span className={`mdt-status-badge ${mdtStatus.toLowerCase()}`}>
                             {mdtStatus}
                           </span>
                         ) : '-'}
                       </td>
-                      <td className="p-3">{c.mapping_dept ? <span className={departmentBadgeClass(c.mapping_dept)}>{c.mapping_dept}</span> : <span className="text-slate-500">—</span>}</td>
-                      <td className="p-3 text-slate-600">{displayStaffFirstNames(c.officer_reviewer)}</td>
-                      <td className="p-3 text-slate-600">{displayStaffFirstNames([c.interviewer_name, c.assist_name].filter(Boolean).join(', '))}</td>
-                      <td className="p-3">
-                        <span className={`rounded-full border px-2 py-1 text-[9px] font-bold ${
+                      <td className="p-3 align-middle text-center">
+                        <span className={`dashboard-interview-status whitespace-nowrap rounded-full border px-2 py-1 text-[9px] font-bold ${
                           c.status_interview === 'Passed' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
                           c.status_interview === 'Failed' ? 'border-rose-200 bg-rose-50 text-rose-700' :
                           c.status_interview === 'Pending' ? 'border-amber-200 bg-amber-50 text-amber-700' :
                           'border-slate-200 bg-slate-50 text-slate-500'
                         }`}>{interviewStatusDisplay}</span>
                       </td>
+                      <td className="p-3 align-middle text-center text-slate-600">{displayStaffFirstNames(c.officer_reviewer)}</td>
+                      <td className="p-3 align-middle text-center text-slate-600">{displayStaffFirstNames([c.interviewer_name, c.assist_name].filter(Boolean).join(', '))}</td>
+                      <td className="p-3 align-middle text-center">{c.mapping_dept ? <span className={departmentBadgeClass(c.mapping_dept)}>{c.mapping_dept}</span> : <span className="text-slate-500">—</span>}</td>
                     </tr>
                   );
                 })
@@ -434,8 +434,8 @@ export default function InternalDashboard() {
       {detailCandidate && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/60 p-2 backdrop-blur-sm sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setDetailCandidate(null); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="candidate-detail-title" className="candidate-detail-modal flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-4">
           <header className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
-            <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Rincian kandidat</p><h2 id="candidate-detail-title" className="mt-0.5 truncate text-xl font-bold text-slate-900">{detailCandidate.nama}</h2><div className="mt-1.5 flex flex-wrap items-center gap-1.5"><span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">{detailCandidate.gender || 'Gender belum diisi'}</span><span className={departmentBadgeClass(detailCandidate.mapping_dept)}>{detailCandidate.mapping_dept || 'Belum ada departemen final'}</span></div></div>
-            <div className="flex shrink-0 items-center gap-2">{detailCandidate.link_cv && <a href={detailCandidate.link_cv} target="_blank" rel="noreferrer" className="inline-flex rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Buka Thread CV ↗</a>}<button type="button" onClick={() => setDetailCandidate(null)} aria-label="Tutup rincian kandidat" className="rounded-lg px-3 py-1 text-2xl leading-none text-slate-500 hover:bg-slate-100">×</button></div>
+            <div className="candidate-detail-heading min-w-0"><p className="candidate-detail-kicker text-[11px] font-bold uppercase tracking-wider">Rincian kandidat</p><h2 id="candidate-detail-title" className="mt-0.5 truncate text-xl font-bold text-slate-900">{detailCandidate.nama}</h2><div className="candidate-detail-badges mt-1.5 flex flex-wrap items-center gap-1.5"><span className="candidate-detail-gender rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">{detailCandidate.gender || 'Gender belum diisi'}</span><span className={departmentBadgeClass(detailCandidate.mapping_dept)}>{detailCandidate.mapping_dept || 'Belum ada departemen final'}</span></div></div>
+            <div className="candidate-detail-actions flex shrink-0 items-center gap-2">{detailCandidate.link_cv && <a href={detailCandidate.link_cv} target="_blank" rel="noreferrer" className="candidate-detail-cv-link inline-flex rounded-lg px-3 py-2 text-xs font-bold text-white shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Buka Thread CV ↗</a>}<button type="button" onClick={() => setDetailCandidate(null)} aria-label="Tutup rincian kandidat" className="candidate-detail-close rounded-lg px-3 py-1 text-2xl leading-none text-slate-500 hover:bg-slate-100">×</button></div>
           </header>
           <div className={`grid min-h-0 flex-1 gap-3 overflow-hidden ${detailNotes.length >= 3 ? 'md:grid-cols-[1.05fr_0.95fr]' : ''}`}>
             <section className="min-h-0 overflow-hidden pr-1"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Data dan proses</h3><div className="mb-2 grid grid-cols-3 gap-2">

@@ -359,8 +359,8 @@ export default function InterviewPage() {
               {/* PREFERENSI DEPARTEMEN KANDIDAT */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Minat departemen kandidat <span className="font-normal text-slate-400">(opsional)</span></label>
-                <p className="mb-2 text-[10px] leading-relaxed text-slate-500">Pilihan ini hanya mencatat preferensi kandidat dan tidak menetapkan penempatan akhir.</p>
-                <div className="grid grid-cols-2 gap-3">
+                <p className="mb-2 text-[10px] leading-relaxed text-slate-500">Catat pilihan kandidat sebagai referensi minat. Pilihan ini tidak menetapkan departemen final.</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <button
                     type="button"
                     aria-pressed={form.deptPreference === 'LSSD'}
@@ -392,9 +392,21 @@ export default function InterviewPage() {
                       <div className="text-[10px] text-slate-500">Minat Police Department</div>
                     </div>
                   </button>
+                  <button
+                    type="button"
+                    aria-pressed={form.deptPreference === 'DOC'}
+                    onClick={() => updateAcademyTemplateData({ deptPreference: form.deptPreference === 'DOC' ? '' : 'DOC' })}
+                    className={`interview-department-card flex items-center gap-3 rounded-xl border p-3 text-left transition-all ${
+                      form.deptPreference === 'DOC'
+                        ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500/20 shadow-sm'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}>
+                    <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-emerald-200 bg-emerald-50 text-[10px] font-extrabold text-emerald-800">DOC</span>
+                    <span><span className="block text-xs font-bold text-emerald-950">DOC</span><span className="block text-[10px] text-slate-500">Minat Department of Corrections</span></span>
+                  </button>
                 </div>
-                {form.deptPreference && <button type="button" className="mt-2 text-[10px] font-semibold text-slate-500 underline" onClick={() => updateAcademyTemplateData({ deptPreference: '' })}>Hapus preferensi</button>}
-                <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-800">Penempatan final LSSD / LSPD hanya dapat ditetapkan oleh Team RED.</div>
+                {form.deptPreference && <div className="mt-2 flex flex-wrap items-center gap-2"><span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-500">Referensi minat tersimpan: {form.deptPreference}</span><button type="button" className="text-[10px] font-semibold text-slate-500 underline" onClick={() => updateAcademyTemplateData({ deptPreference: '' })}>Hapus preferensi</button></div>}
+                <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-500">Minat ini hanya bahan pertimbangan. Departemen final tetap dipilih admin atau Team RNT pada Manajemen.</div>
               </div>
 
               {/* HASIL WAWANCARA */}

@@ -7,6 +7,7 @@ import {
   getInternalSession,
   hasSessionSecret,
   INTERNAL_SESSION_COOKIE,
+  MANUAL_LOGOUT_COOKIE,
   readRememberedPinToken,
   REMEMBERED_PIN_COOKIE,
   sessionCookieOptions,
@@ -52,8 +53,9 @@ function isSameOrigin(request) {
 export async function GET(request) {
   const currentSession = getInternalSession(request);
   const remembered = readRememberedPinToken(request);
-  let profile = currentSession || null;
-  let expiresAt = currentSession?.expiresAt || remembered?.expiresAt;
+  const manualLogout = request.cookies?.get(MANUAL_LOGOUT_COOKIE)?.value === '1';
+  let profile = manualLogout ? null : currentSession || null;
+  let expiresAt = manualLogout ? remembered?.expiresAt : currentSession?.expiresAt || remembered?.expiresAt;
   try {
     if (!profile && remembered) {
       const db = createServiceRoleClient();
@@ -80,8 +82,19 @@ export async function GET(request) {
         };
       }
     }
-    const pinVerified = Boolean(profile && expiresAt > Math.floor(Date.now() / 1000));
-    const response = noStore(pinVerified ? {
+    const sessionValid = Boolean(profile && expiresAt > Math.floor(Date.now() / 1000));
+    const authenticated = sessionValid && !manualLogout;
+    const pinVerified = sessionValid && manualLogout;
+    const response = noStore(authenticated ? {
+      authenticated: true,
+      pinVerified: false,
+      officerName: profile.name,
+      userRole: profile.role,
+      officerRank: profile.rank,
+      officerPosition: profile.position || '',
+      officerDepartment: profile.department,
+      expiresAt,
+    } : pinVerified ? {
       authenticated: false,
       pinVerified: true,
       officerName: profile.name,
@@ -91,15 +104,28 @@ export async function GET(request) {
       officerDepartment: profile.department,
       expiresAt,
     } : { authenticated: false, pinVerified: false });
-    // A page reload always returns to the lock screen; only the explicit login action creates a portal session.
-    response.cookies.set(INTERNAL_SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
-    if (pinVerified && (!remembered || remembered.personnelId !== profile.personnelId || remembered.role !== profile.role)) {
+    if (authenticated) {
+      // Browser session cookies can disappear when a browser is reopened. Restore a
+      // valid 24-hour remembered session without turning it into a logout lock.
+      response.cookies.set(INTERNAL_SESSION_COOKIE, createInternalSessionToken({
+        name: profile.name,
+        role: profile.role,
+        rank: profile.rank,
+        position: profile.position || '',
+        department: profile.department,
+        personnelId: profile.personnelId,
+        expiresAt,
+      }), browserSessionCookieOptions());
+    } else {
+      response.cookies.set(INTERNAL_SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
+    }
+    if (sessionValid && (!remembered || remembered.personnelId !== profile.personnelId || remembered.role !== profile.role)) {
       response.cookies.set(REMEMBERED_PIN_COOKIE, createRememberedPinToken({
         personnelId: profile.personnelId,
         role: profile.role,
         expiresAt,
       }), sessionCookieOptions(expiresAt - Math.floor(Date.now() / 1000)));
-    } else if (!pinVerified && request.cookies?.get(REMEMBERED_PIN_COOKIE)?.value) {
+    } else if (!sessionValid && request.cookies?.get(REMEMBERED_PIN_COOKIE)?.value) {
       response.cookies.set(REMEMBERED_PIN_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
     }
     return response;
@@ -261,6 +287,7 @@ export async function POST(request) {
     role,
     expiresAt,
   }), sessionCookieOptions(expiresAt - Math.floor(Date.now() / 1000)));
+  response.cookies.set(MANUAL_LOGOUT_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
   return response;
 }
 
@@ -284,5 +311,6 @@ export async function DELETE(request) {
   }
   const response = noStore({ success: true });
   response.cookies.set(INTERNAL_SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
+  response.cookies.set(MANUAL_LOGOUT_COOKIE, '1', sessionCookieOptions());
   return response;
 }

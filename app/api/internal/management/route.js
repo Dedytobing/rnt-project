@@ -11,6 +11,7 @@ const candidateAction = z.discriminatedUnion('action', [
 const departmentAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('SET_CANDIDATE_DEPARTMENT'), candidateId: z.string().min(1).max(100), batchId: z.uuid(), department: z.enum(['', 'LSPD', 'LSSD', 'DOC']) }).strict(),
   z.object({ action: z.literal('SET_CANDIDATE_DEPARTMENTS_BULK'), candidateIds: z.array(z.string().min(1).max(100)).min(1).max(500), batchId: z.uuid(), department: z.enum(['', 'LSPD', 'LSSD', 'DOC']) }).strict(),
+  z.object({ action: z.literal('SET_CANDIDATE_DEPARTMENTS_FROM_PREFERENCE'), candidateIds: z.array(z.string().min(1).max(100)).min(1).max(500), batchId: z.uuid() }).strict(),
 ]);
 const personnelAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('SAVE_PERSONNEL'), personnelId: z.uuid(), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']), rank: z.string().trim().min(2).max(60), position: z.string().trim().max(100), department: z.enum(['LSPD', 'LSSD']) }).strict(),
@@ -209,6 +210,26 @@ export async function POST(request) {
       if (error) throw error;
       if ((data || []).length !== candidateIds.length) throw new Error('Bulk department update returned an unexpected row count.');
       return NextResponse.json({ success: true, updatedCount: data.length });
+    }
+    if (action.action === 'SET_CANDIDATE_DEPARTMENTS_FROM_PREFERENCE') {
+      const candidateIds = [...new Set(action.candidateIds)];
+      const { data: existingCandidates, error: lookupError } = await db.from('candidates').select('id,dept_preference')
+        .eq('batch_id', action.batchId).is('deleted_at', null).in('id', candidateIds);
+      if (lookupError) throw lookupError;
+      if ((existingCandidates || []).length !== candidateIds.length) return NextResponse.json({ success: false, error: 'Sebagian kandidat tidak ditemukan pada batch ini. Tidak ada perubahan yang diterapkan.' }, { status: 404 });
+      const eligible = existingCandidates.filter((candidate) => ['LSPD', 'LSSD', 'DOC'].includes(String(candidate.dept_preference || '').toUpperCase()));
+      if (eligible.length !== candidateIds.length) return NextResponse.json({ success: false, error: 'Semua kandidat terpilih harus memiliki minat departemen yang tercatat. Tidak ada perubahan yang diterapkan.' }, { status: 400 });
+      let updatedCount = 0;
+      for (const department of ['LSPD', 'LSSD', 'DOC']) {
+        const ids = eligible.filter((candidate) => String(candidate.dept_preference).toUpperCase() === department).map((candidate) => candidate.id);
+        if (!ids.length) continue;
+        const { data, error } = await db.from('candidates').update({ mapping_dept: department, updated_at: new Date().toISOString() })
+          .eq('batch_id', action.batchId).is('deleted_at', null).in('id', ids).select('id');
+        if (error) throw error;
+        if ((data || []).length !== ids.length) throw new Error('Preference department update returned an unexpected row count.');
+        updatedCount += data.length;
+      }
+      return NextResponse.json({ success: true, updatedCount });
     }
 
   } catch (error) {

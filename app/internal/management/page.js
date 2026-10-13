@@ -65,7 +65,7 @@ export default function RecruitmentManagementPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
-  const [bulkDepartment, setBulkDepartment] = useState('LSPD');
+  const [bulkDepartment, setBulkDepartment] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [activeModule, setActiveModule] = useState('groups');
@@ -162,10 +162,11 @@ export default function RecruitmentManagementPage() {
     const key = String(candidate.id);
     const department = departmentForCandidate(candidate);
     const departmentLabel = department || 'Belum Ditentukan';
-    return <article key={key} className="flex min-h-12 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:border-slate-300 hover:bg-slate-50">
+    const preference = ['LSPD', 'LSSD', 'DOC'].includes(String(candidate.dept_preference || '').toUpperCase()) ? String(candidate.dept_preference).toUpperCase() : '';
+    return <article key={key} className="management-candidate-row grid min-h-14 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:border-slate-300 hover:bg-slate-50">
       <input type="checkbox" aria-label={`Pilih ${candidate.nama}`} checked={selectedCandidateIds.includes(key)} onChange={() => toggleCandidate(key)} className="h-4 w-4 shrink-0 accent-[#1E3A2B]" />
-      <strong className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800" title={candidate.nama}>{candidate.nama}</strong>
-      <span className={`shrink-0 department-badge ${department === 'LSSD' ? 'department-badge-lssd' : department === 'LSPD' ? 'department-badge-lspd' : department === 'DOC' ? 'department-badge-doc' : 'department-badge-unset'}`}>{departmentLabel}</span>
+      <div className="management-candidate-identity flex min-w-0 items-center gap-2"><strong className="min-w-0 truncate text-sm font-semibold text-slate-800" title={candidate.nama}>{candidate.nama}</strong>{preference && <span className={`management-candidate-preference management-candidate-preference-${preference.toLowerCase()}`}>Minat: {preference}</span>}</div>
+      <div className="management-candidate-status-slot"><span className={`department-badge ${department === 'LSSD' ? 'department-badge-lssd' : department === 'LSPD' ? 'department-badge-lspd' : department === 'DOC' ? 'department-badge-doc' : 'department-badge-unset'}`}>{departmentLabel}</span></div>
     </article>;
   };
 
@@ -249,7 +250,7 @@ export default function RecruitmentManagementPage() {
   };
 
   const assignSelectedCandidates = async () => {
-    if (!selectedBatchId || !selectedCandidateIds.length) return;
+    if (!selectedBatchId || !selectedCandidateIds.length || !bulkDepartment) return;
     setBulkSaving(true);
     setError('');
     setMessage('');
@@ -257,11 +258,11 @@ export default function RecruitmentManagementPage() {
       const response = await fetch('/api/internal/management', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'SET_CANDIDATE_DEPARTMENTS_BULK', candidateIds: selectedCandidateIds, batchId: selectedBatchId, department: bulkDepartment }),
+        body: JSON.stringify({ action: 'SET_CANDIDATE_DEPARTMENTS_BULK', candidateIds: selectedCandidateIds, batchId: selectedBatchId, department: bulkDepartment === '__UNSET__' ? '' : bulkDepartment }),
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Pemindahan kandidat gagal disimpan.');
-      setMessage(`${result.updatedCount || selectedCandidateIds.length} kandidat ditetapkan ke ${bulkDepartment || 'Belum Ditentukan'}.`);
+      setMessage(`${result.updatedCount || selectedCandidateIds.length} kandidat ditetapkan ke ${bulkDepartment === '__UNSET__' ? 'Belum ditentukan' : bulkDepartment}.`);
       setSelectedCandidateIds([]);
       await refresh();
     } catch (issue) {
@@ -269,6 +270,22 @@ export default function RecruitmentManagementPage() {
     } finally {
       setBulkSaving(false);
     }
+  };
+
+  const assignSelectedByPreference = async () => {
+    const preferenceIds = selectedCandidateIds.filter((id) => {
+      const candidate = candidates.find((item) => String(item.id) === id);
+      return ['LSPD', 'LSSD', 'DOC'].includes(String(candidate?.dept_preference || '').toUpperCase());
+    });
+    if (!selectedBatchId || !preferenceIds.length) return;
+    setBulkSaving(true); setError(''); setMessage('');
+    try {
+      const result = await postManagement({ action: 'SET_CANDIDATE_DEPARTMENTS_FROM_PREFERENCE', candidateIds: preferenceIds, batchId: selectedBatchId });
+      setMessage(`${result.updatedCount} kandidat ditetapkan sesuai minat yang tercatat; penetapan ini dilakukan oleh admin.`);
+      setSelectedCandidateIds((current) => current.filter((id) => !preferenceIds.includes(id)));
+      await refresh();
+    } catch (issue) { setError(issue.message || 'Penetapan sesuai minat gagal disimpan.'); }
+    finally { setBulkSaving(false); }
   };
 
   const postManagement = async (payload) => {
@@ -363,7 +380,7 @@ export default function RecruitmentManagementPage() {
 
   return <div className="management-page space-y-5 pb-24">
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="management-eyebrow text-xs font-bold uppercase tracking-[0.16em] text-[#1E3A2B]">Pengelompokan Academy per Departemen</p><h2 className="mt-1 text-2xl font-bold text-slate-900">{selectedBatch.name}</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Kandidat dikelompokkan berdasarkan departemen final atau preferensi. Admin dapat mengubah kelompok secara manual pada setiap kartu.</p></div><span className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-[#1E3A2B]">{candidates.length} kandidat · {activePersonnel.length} personel aktif</span></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="management-eyebrow text-xs font-bold uppercase tracking-[0.16em] text-[#1E3A2B]">Pengelompokan Academy per Departemen</p><h2 className="mt-1 text-2xl font-bold text-slate-900">{selectedBatch.name}</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Departemen final ditetapkan oleh admin. Minat kandidat hanya menjadi referensi dan tidak mengubah penempatan secara otomatis.</p></div><span className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-[#1E3A2B]">{candidates.length} kandidat · {activePersonnel.length} personel aktif</span></div>
     </section>
     <section aria-label="Sub-menu manajemen" className="grid gap-3 sm:grid-cols-3">
       {[
@@ -385,8 +402,8 @@ export default function RecruitmentManagementPage() {
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Panel Kandidat</p><h3 className="mt-1 text-lg font-bold text-slate-900">Kandidat · {candidates.length}</h3><p className="mt-1 text-xs text-slate-500">Pilih departemen setiap kandidat; Absensi mengikuti data ini.</p></div><label className="w-full sm:max-w-xs"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari kandidat</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ketik nama kandidat…" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>
-          {selectedCandidateIds.length > 0 && <div className="mt-4 flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 sm:flex-row sm:items-center sm:justify-between"><span className="text-sm font-semibold text-emerald-900">{selectedCandidateIds.length} kandidat dipilih</span><div className="flex flex-wrap items-center gap-2"><label className="sr-only" htmlFor="bulk-candidate-department">Departemen untuk kandidat terpilih</label><select id="bulk-candidate-department" value={bulkDepartment} onChange={(event) => setBulkDepartment(event.target.value)} className="min-w-44 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm"><option value="">Belum Ditentukan</option><option value="LSPD">LSPD</option><option value="LSSD">LSSD</option><option value="DOC">DOC</option></select><button type="button" disabled={bulkSaving || loading} onClick={assignSelectedCandidates} className="rounded-lg bg-[#1E3A2B] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{bulkSaving ? 'Menyimpan…' : 'Tetapkan Departemen Terpilih'}</button><button type="button" onClick={() => setSelectedCandidateIds([])} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Batal pilih</button></div></div>}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Panel Kandidat</p><h3 className="mt-1 text-lg font-bold text-slate-900">Kandidat · {candidates.length}</h3><p className="mt-1 text-xs text-slate-500">Pilih penetapan final manual per kartu atau gunakan aksi massal. Preferensi selalu ditampilkan sebagai referensi.</p></div><label className="w-full sm:max-w-xs"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari kandidat</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ketik nama kandidat…" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>
+          {selectedCandidateIds.length > 0 && <div className="mt-4 flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 sm:flex-row sm:items-center sm:justify-between"><span className="text-sm font-semibold text-emerald-900">{selectedCandidateIds.length} kandidat dipilih</span><div className="flex flex-wrap items-center gap-2"><label className="sr-only" htmlFor="bulk-candidate-department">Departemen final untuk kandidat terpilih</label><select id="bulk-candidate-department" value={bulkDepartment} onChange={(event) => setBulkDepartment(event.target.value)} className="min-w-40 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm"><option value="">Pilih departemen final…</option><option value="LSPD">LSPD</option><option value="LSSD">LSSD</option><option value="DOC">DOC</option><option value="__UNSET__">Kosongkan penetapan</option></select><button type="button" disabled={bulkSaving || loading || !bulkDepartment} onClick={assignSelectedCandidates} className="rounded-lg bg-[#1E3A2B] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{bulkSaving ? 'Menyimpan…' : 'Terapkan pilihan manual'}</button><button type="button" disabled={bulkSaving || loading || !selectedCandidateIds.some((id) => ['LSPD', 'LSSD', 'DOC'].includes(String(candidates.find((candidate) => String(candidate.id) === id)?.dept_preference || '').toUpperCase()))} onClick={assignSelectedByPreference} className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-bold text-emerald-900 disabled:cursor-not-allowed disabled:opacity-45">Tetapkan sesuai minat</button><button type="button" onClick={() => setSelectedCandidateIds([])} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Batal pilih</button></div></div>}
         </div>
         {loading ? <div className="p-14 text-center text-sm text-slate-500">Memuat seluruh kandidat batch…</div> : <div className="space-y-2 p-3 sm:p-4">
           {visibleCandidates.length ? visibleCandidates.map((candidate) => renderCandidate(candidate)) : <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">Tidak ada kandidat yang cocok dengan filter.</div>}

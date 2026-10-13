@@ -198,7 +198,7 @@ export async function POST(request) {
     // 3. SESI WAWANCARA (Interviewer)
     if (action === 'UPDATE_INTERVIEW') {
       const { id, interviewerName = '', assistName, statusInterview, deptPreference = '', notesInterviewer } = body;
-      if (!['', 'LSSD', 'LSPD'].includes(deptPreference)) {
+      if (!['', 'LSSD', 'LSPD', 'DOC'].includes(deptPreference)) {
         return NextResponse.json({ success: false, error: 'Preferensi departemen tidak valid.' }, { status: 400 });
       }
 
