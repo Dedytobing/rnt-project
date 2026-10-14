@@ -92,9 +92,15 @@ export default function CandidatePage() {
   }, [hasUnsavedChanges]);
 
   useEffect(() => {
-    fetch('/api/batches', { cache: 'no-store' }).then((response) => response.json())
-      .then((data) => { if (data.success) setActiveBatch(data.batch); })
-      .catch(() => setActiveBatch(null));
+    let mounted = true;
+    const refreshRegistrationWindow = () => {
+      fetch('/api/batches', { cache: 'no-store' }).then((response) => response.json())
+        .then((data) => { if (mounted && data.success) setActiveBatch(data.batch); })
+        .catch(() => { if (mounted) setActiveBatch(null); });
+    };
+    refreshRegistrationWindow();
+    const timer = window.setInterval(refreshRegistrationWindow, 30_000);
+    return () => { mounted = false; window.clearInterval(timer); };
   }, []);
 
   const handleCandSubmit = async (event) => {

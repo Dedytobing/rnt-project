@@ -121,10 +121,9 @@ function DateTimeField({ value, onChange, label }) {
 }
 
 function batchStatus(batch, now) {
-  if (Date.parse(batch.academy_end) < now) return { label: 'Selesai', className: 'bg-slate-100 text-slate-600 ring-slate-200' };
   if (Date.parse(batch.registration_start) > now) return { label: 'Terjadwal', className: 'bg-sky-100 text-sky-800 ring-sky-200' };
-  if (batch.is_active) return { label: 'Aktif', className: 'bg-emerald-100 text-emerald-800 ring-emerald-200' };
-  return { label: 'Terjadwal', className: 'bg-sky-100 text-sky-800 ring-sky-200' };
+  if (now <= Date.parse(batch.registration_end)) return { label: 'Aktif', className: 'bg-emerald-100 text-emerald-800 ring-emerald-200' };
+  return { label: 'Selesai', className: 'bg-slate-100 text-slate-600 ring-slate-200' };
 }
 
 function InternalLayoutContent({ children }) {

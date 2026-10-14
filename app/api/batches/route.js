@@ -4,12 +4,17 @@ import { createServiceRoleClient } from '@/lib/supabase-server';
 export async function GET() {
   try {
     const db = createServiceRoleClient();
+    const now = new Date().toISOString();
     const { data, error } = await db.from('recruitment_batches')
       .select('id,name,registration_start,registration_end')
-      .eq('is_active', true).is('deleted_at', null).maybeSingle();
+      .lte('registration_start', now)
+      .gte('registration_end', now)
+      .is('deleted_at', null)
+      .order('registration_start', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (error) throw error;
-    const open = data && Date.now() >= Date.parse(data.registration_start) && Date.now() <= Date.parse(data.registration_end);
-    return NextResponse.json({ success: true, batch: open ? data : null }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ success: true, batch: data || null }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('Active batch query failed:', error);
     return NextResponse.json({ success: false, error: 'Informasi batch belum tersedia.' }, { status: 503 });
