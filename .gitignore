@@ -51,3 +51,4 @@ next-env.d.ts
 
 
 !/supabase/migrations/20261023040000_department_source_of_truth.sql
+!/supabase/migrations/20261024000000_candidate_blacklist.sql

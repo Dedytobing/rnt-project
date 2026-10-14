@@ -88,7 +88,19 @@ export async function GET(request) {
       status_interview: c.status_interview || ''
     }));
 
-    return NextResponse.json({ success: true, data: cleanData }, { headers: { 'Cache-Control': 'private, no-store' } });
+    const { data: blacklist, error: blacklistError } = await supabase.from('candidate_blacklist').select('full_name,normalized_name,reason');
+    if (blacklistError) {
+      console.error('Candidate blacklist query failed:', blacklistError);
+      return NextResponse.json({ success: false, error: 'Status blacklist kandidat gagal dimuat.' }, { status: 503 });
+    }
+    const blacklistByName = new Map((blacklist || []).map((item) => [item.normalized_name, item]));
+    const candidatesWithBlacklist = cleanData.map((candidate) => {
+      const normalizedName = String(candidate.nama || '').toLocaleLowerCase('id-ID').trim().replace(/\s+/g, ' ');
+      const match = blacklistByName.get(normalizedName);
+      return { ...candidate, blacklist_reason: match?.reason || '', is_blacklisted: Boolean(match) };
+    });
+
+    return NextResponse.json({ success: true, data: candidatesWithBlacklist }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     console.error('Candidates API GET failed:', err);
     return NextResponse.json({ success: false, error: 'Data kandidat gagal dimuat.' }, { status: 500 });

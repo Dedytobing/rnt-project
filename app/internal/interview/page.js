@@ -353,7 +353,7 @@ export default function InterviewPage() {
                       : 'bg-slate-50/50 border-slate-200 hover:bg-slate-100/80'
                   }`}>
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-xs text-slate-800 truncate">{c.nama}</span>
+                    <span className="flex min-w-0 items-center gap-2"><span className="font-bold text-xs text-slate-800 truncate">{c.nama}</span>{c.is_blacklisted && <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-extrabold text-rose-800">⚠️ BLACKLISTED</span>}</span>
                     <span className={`interview-queue-status ${c.status_interview === 'Passed' ? 'passed' : c.status_interview === 'Failed' ? 'failed' : c.status_interview === 'Pending' ? 'pending' : 'ready'}`}>
                       {c.status_interview === 'Passed' ? 'Passed' : c.status_interview === 'Failed' ? 'Failed' : c.status_interview === 'Pending' ? 'Pending' : 'Belum interview'}
                     </span>
@@ -386,6 +386,7 @@ export default function InterviewPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {selectedCand.is_blacklisted && <div role="alert" className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900"><strong>⚠️ Kandidat masuk daftar blacklist.</strong><p className="mt-1 whitespace-pre-wrap">{selectedCand.blacklist_reason}</p></div>}
               <div className="flex justify-between items-start border-b border-slate-100 pb-3">
                 <div>
                   <h2 className="text-lg font-bold text-slate-800">{selectedCand.nama}</h2>

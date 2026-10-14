@@ -14,6 +14,8 @@ const departmentAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('SET_CANDIDATE_DEPARTMENTS_FROM_PREFERENCE'), candidateIds: z.array(z.string().min(1).max(100)).min(1).max(500), batchId: z.uuid() }).strict(),
 ]);
 const personnelAction = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('SAVE_BLACKLIST'), blacklistId: z.uuid().nullable().optional(), fullName: z.string().trim().min(2).max(120), reason: z.string().trim().min(2).max(2000) }).strict(),
+  z.object({ action: z.literal('DELETE_BLACKLIST'), blacklistId: z.uuid() }).strict(),
   z.object({ action: z.literal('SAVE_PERSONNEL'), personnelId: z.uuid(), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']), rank: z.string().trim().min(2).max(60), position: z.string().trim().max(100), department: z.enum(['LSPD', 'LSSD', 'SASP']) }).strict(),
   z.object({ action: z.literal('DELETE_PERSONNEL'), personnelId: z.uuid() }).strict(),
   z.object({ action: z.literal('ADD_WHITELIST'), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']) }).strict(),
@@ -47,12 +49,13 @@ export async function GET(request) {
       .eq('id', batchId.data).is('deleted_at', null).maybeSingle();
     if (batchError) throw batchError;
     if (!batch) return NextResponse.json({ success: false, error: 'Batch tidak ditemukan atau sudah dihapus.' }, { status: 404 });
-    const [personnel, whitelist, candidates] = await Promise.all([
+    const [personnel, whitelist, candidates, blacklist] = await Promise.all([
       db.from('rnt_personnel').select('id,full_name,normalized_name,role,rank,position,department,is_active').order('full_name'),
       db.from('rnt_personnel_name_whitelist').select('id,full_name,normalized_name,role,is_active,created_at').order('full_name'),
       db.from('candidates').select('id,nama,link_cv,batch_id,deleted_at,deleted_by,status_cv,status_interview,mdt_check,catatan,notes_investigator,notes_interviewer,created_at,mapping_dept,dept_preference').eq('batch_id', batchId.data).order('created_at', { ascending: false }),
+      db.from('candidate_blacklist').select('id,full_name,normalized_name,reason,created_at,updated_at').order('full_name'),
     ]);
-    const failed = [personnel, whitelist, candidates].find((result) => result.error);
+    const failed = [personnel, whitelist, candidates, blacklist].find((result) => result.error);
     if (failed) throw failed.error;
     return NextResponse.json({
       success: true,
@@ -60,6 +63,7 @@ export async function GET(request) {
       personnel: personnel.data || [],
       whitelist: whitelist.data || [],
       candidates: candidates.data || [],
+      blacklist: blacklist.data || [],
       groups: [],
       groupMembers: [],
       candidateGroups: [],
@@ -83,6 +87,22 @@ export async function POST(request) {
   const action = parsed.data;
   const db = createInternalDataClient(session);
   try {
+    if (action.action === 'SAVE_BLACKLIST') {
+      const fullName = action.fullName.trim();
+      const normalizedName = fullName.toLocaleLowerCase('id-ID').replace(/\s+/g, ' ');
+      let query = action.blacklistId
+        ? db.from('candidate_blacklist').update({ full_name: fullName, normalized_name: normalizedName, reason: action.reason.trim(), updated_at: new Date().toISOString() }).eq('id', action.blacklistId)
+        : db.from('candidate_blacklist').insert({ full_name: fullName, normalized_name: normalizedName, reason: action.reason.trim() });
+      const { data, error } = await query.select('id').single();
+      if (error) throw error;
+      return NextResponse.json({ success: true, blacklistId: data.id });
+    }
+    if (action.action === 'DELETE_BLACKLIST') {
+      const { data, error } = await db.from('candidate_blacklist').delete().eq('id', action.blacklistId).select('id').maybeSingle();
+      if (error) throw error;
+      if (!data) return NextResponse.json({ success: false, error: 'Data blacklist tidak ditemukan.' }, { status: 404 });
+      return NextResponse.json({ success: true });
+    }
     if (action.action === 'ADD_WHITELIST') {
       const fullName = cleanWhitelistRosterLine(action.fullName);
       if (fullName.length < 2 || fullName.length > 80 || /\bVACANT\b/i.test(action.fullName)) return NextResponse.json({ success: false, error: 'Masukkan nama valid tanpa baris VACANT.' }, { status: 400 });

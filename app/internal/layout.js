@@ -841,7 +841,7 @@ function InternalLayoutContent({ children }) {
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/review` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'review' || pathname === '/internal/review' ? 'active' : ''}`}><span>⌕</span>Review CV</Link>
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/interview` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'interview' || pathname === '/internal/interview' ? 'active' : ''}`}><span>◷</span>Interview panel</Link>
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/absensi` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'absensi' || routeSection === 'academy' || pathname === '/internal/academy' ? 'active' : ''}`}><span>✓</span>Absensi Academy</Link>
-            <Link href="/candidate" className="staff-nav-link"><span>＋</span>Input kandidat</Link>
+            <Link href={`/candidate?source=internal&returnTo=${encodeURIComponent(pathname)}`} className="staff-nav-link"><span>＋</span>Input kandidat</Link>
             {userRole === 'ADMIN' && <>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/audit-log` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'audit-log' || pathname === '/internal/audit-logs' ? 'active' : ''}`}><span>≡</span>Audit log<span className="nav-admin-tag">RNT</span></Link>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/management` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'management' || pathname === '/internal/management' ? 'active' : ''}`}><span>⚙</span>Manajemen<span className="nav-admin-tag">RNT</span></Link>
@@ -868,7 +868,7 @@ function InternalLayoutContent({ children }) {
       <main className="flex-1 staff-main">
         <header className="staff-topbar">
           <div><div className="staff-breadcrumb">RNT PROJECT <span>/</span> PERSONNEL</div><h1>{pageTitle}</h1><p>{pageSubtitle}</p></div>
-          <div className="staff-top-actions"><span className="staff-live"><i /> SISTEM AKTIF</span>{selectedBatch && <button type="button" onClick={() => setShowBatchPicker(true)} className="staff-batch-switcher rounded-lg border border-[#1E3A2B]/20 bg-white px-3 py-2 text-xs font-bold text-[#1E3A2B] hover:bg-[#edf4ee]">Batch: {selectedBatch.name} · Ganti</button>}<Link href="/candidate" className="staff-new-candidate"><span>＋</span> Kandidat baru</Link></div>
+          <div className="staff-top-actions"><span className="staff-live"><i /> SISTEM AKTIF</span>{selectedBatch && <button type="button" onClick={() => setShowBatchPicker(true)} className="staff-batch-switcher rounded-lg border border-[#1E3A2B]/20 bg-white px-3 py-2 text-xs font-bold text-[#1E3A2B] hover:bg-[#edf4ee]">Batch: {selectedBatch.name} · Ganti</button>}<Link href={`/candidate?source=internal&returnTo=${encodeURIComponent(pathname)}`} className="staff-new-candidate"><span>＋</span> Kandidat baru</Link></div>
         </header>
         <div className="staff-content">{children}</div>
       </main>
