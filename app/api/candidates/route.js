@@ -110,13 +110,16 @@ export async function GET(request) {
 // POST: Aksi Update & Registrasi
 export async function POST(request) {
   try {
-    const requestLimited = await enforceRateLimit(request, {
-      namespace: 'candidate-api',
-      limit: 60,
-      windowSeconds: 10 * 60,
-    });
-    const requestRateError = rateLimitResponse(requestLimited);
-    if (requestRateError) return requestRateError;
+    const internalSession = getInternalSession(request);
+    if (!internalSession) {
+      const requestLimited = await enforceRateLimit(request, {
+        namespace: 'candidate-api',
+        limit: 60,
+        windowSeconds: 10 * 60,
+      });
+      const requestRateError = rateLimitResponse(requestLimited);
+      if (requestRateError) return requestRateError;
+    }
 
     const parsedBody = await readValidatedJson(request, candidateActionSchema);
     if (!parsedBody.data) {
@@ -127,9 +130,11 @@ export async function POST(request) {
 
     // 1. TAMBAH KANDIDAT BARU (Public Form)
     if (action === 'ADD_CANDIDATE') {
-      const limited = await enforceRateLimit(request, { namespace: 'candidate-registration', limit: 5, windowSeconds: 60 * 60 });
-      const rateError = rateLimitResponse(limited);
-      if (rateError) return rateError;
+      if (!internalSession) {
+        const limited = await enforceRateLimit(request, { namespace: 'candidate-registration', limit: 5, windowSeconds: 60 * 60 });
+        const rateError = rateLimitResponse(limited);
+        if (rateError) return rateError;
+      }
       if (!isCandidateServiceConfigured()) {
         return NextResponse.json({ success: false, error: 'Layanan pendaftaran belum dikonfigurasi.' }, { status: 503 });
       }

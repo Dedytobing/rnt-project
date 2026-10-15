@@ -27,12 +27,23 @@ function formatRegistrationDeadline(value) {
 export default function CandidatePage() {
   const [candForm, setCandForm] = useState({ nama: '', gender: '', linkCv: '' });
   const [loading, setLoading] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [alert, setAlert] = useState({ show: false, msg: '', type: '' });
   const [activeBatch, setActiveBatch] = useState(null);
   const [showPortalBack, setShowPortalBack] = useState(false);
   const [portalReturnTo, setPortalReturnTo] = useState('/internal/dashboard');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const hasUnsavedChanges = Boolean(candForm.nama || candForm.gender || candForm.linkCv);
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return undefined;
+    const timer = window.setTimeout(() => setCooldownSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldownSeconds]);
+
+  const cooldownMessage = cooldownSeconds >= 60
+    ? `${Math.floor(cooldownSeconds / 60)} menit ${cooldownSeconds % 60} detik`
+    : `${cooldownSeconds} detik`;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -117,9 +128,11 @@ export default function CandidatePage() {
       const data = await response.json();
 
       if (data.success) {
+        setCooldownSeconds(0);
         setAlert({ show: true, msg: data.message || 'Pendaftaran berhasil dikirim.', type: 'success' });
         setCandForm({ nama: '', gender: '', linkCv: '' });
       } else {
+        if (response.status === 429) setCooldownSeconds(Math.max(1, Number(data.retryAfter) || Number(response.headers.get('Retry-After')) || 1));
         setAlert({ show: true, msg: data.error || 'Pendaftaran belum dapat dikirim.', type: 'error' });
       }
     } catch {
@@ -181,10 +194,10 @@ export default function CandidatePage() {
           />
           <p className="candidate-field-hint">Pastikan thread CV dapat dibuka oleh tim rekrutmen.</p>
 
-          {alert.show && <div role="status" className={`candidate-alert ${alert.type}`}>{alert.msg}</div>}
+          {alert.show && <div role="status" aria-live="polite" className={`candidate-alert ${alert.type}`}>{cooldownSeconds > 0 && alert.msg.toLowerCase().includes('terlalu banyak mencoba') ? `Terlalu banyak mencoba. Silakan tunggu ${cooldownMessage} lagi.` : alert.msg}</div>}
 
-          <button className="candidate-submit" type="submit" disabled={loading || !activeBatch}>
-            {loading ? 'Mengirim pendaftaran…' : 'Kirim pendaftaran'}
+          <button className="candidate-submit" type="submit" disabled={loading || !activeBatch || cooldownSeconds > 0}>
+            {loading ? 'Mengirim pendaftaran…' : cooldownSeconds > 0 ? `Tunggu ${cooldownMessage}` : 'Kirim pendaftaran'}
             {!loading && <span aria-hidden="true">→</span>}
           </button>
           <p className="candidate-required-note">Kolom bertanda * wajib diisi.</p>
