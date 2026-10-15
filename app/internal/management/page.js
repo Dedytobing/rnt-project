@@ -134,6 +134,10 @@ export default function RecruitmentManagementPage() {
   const currentCandidatePage = Math.min(candidatePage, Math.max(1, Math.ceil(searchedCandidates.length / 10)));
   const visibleCandidatesPage = useMemo(() => searchedCandidates.slice((currentCandidatePage - 1) * 10, currentCandidatePage * 10), [searchedCandidates, currentCandidatePage]);
   const departmentForCandidate = useCallback((candidate) => ['LSPD', 'LSSD', 'DOC'].includes(String(candidate.mapping_dept || '').toUpperCase()) ? String(candidate.mapping_dept).toUpperCase() : '', []);
+  const academyCandidates = useMemo(() => candidates.filter((candidate) => {
+    const cvStatus = String(candidate.status_cv || '').trim().toLowerCase();
+    return candidate.status_interview === 'Passed' && cvStatus && !['pending', 'rejected', 'belum direview', 'belum di-review'].includes(cvStatus);
+  }), [candidates, departmentForCandidate]);
   const membersByGroup = useMemo(() => {
     const grouped = new Map();
     for (const member of data.groupMembers) {
@@ -145,20 +149,20 @@ export default function RecruitmentManagementPage() {
   const candidateGroupByCandidate = useMemo(() => new Map(data.candidateGroups.map((item) => [String(item.candidate_id), item.group_id])), [data.candidateGroups]);
   const candidateCountByGroup = useMemo(() => {
     const counts = new Map();
-    const activeCandidateIds = new Set(candidates.map((candidate) => String(candidate.id)));
+    const activeCandidateIds = new Set(academyCandidates.map((candidate) => String(candidate.id)));
     for (const assignment of data.candidateGroups) {
       if (activeCandidateIds.has(String(assignment.candidate_id))) counts.set(assignment.group_id, (counts.get(assignment.group_id) || 0) + 1);
     }
     return counts;
-  }, [data.candidateGroups, candidates]);
+  }, [data.candidateGroups, academyCandidates]);
   const selectedGroup = data.groups.find((group) => group.id === selectedGroupId) || null;
   const selectedGroupMembers = selectedGroup ? membersByGroup.get(selectedGroup.id) || [] : [];
   const selectedGroupCandidateCount = selectedGroup ? candidateCountByGroup.get(selectedGroup.id) || 0 : 0;
   const normalizedSearch = search.trim().toLowerCase();
-  const visibleCandidates = useMemo(() => candidates
+  const visibleCandidates = useMemo(() => academyCandidates
     .filter((candidate) => candidate.nama.toLowerCase().includes(normalizedSearch))
     .filter((candidate) => candidateFilter === 'ALL' || (candidateFilter.startsWith('DEPT:') && departmentForCandidate(candidate) === candidateFilter.slice(5)))
-    .sort((left, right) => left.nama.localeCompare(right.nama, 'id')), [candidates, normalizedSearch, candidateFilter, departmentForCandidate]);
+    .sort((left, right) => left.nama.localeCompare(right.nama, 'id')), [academyCandidates, normalizedSearch, candidateFilter, departmentForCandidate]);
   const renderCandidate = (candidate) => {
     const key = String(candidate.id);
     const department = departmentForCandidate(candidate);
@@ -398,11 +402,11 @@ export default function RecruitmentManagementPage() {
 
   return <div className="management-page space-y-5 pb-24">
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="management-eyebrow text-xs font-bold uppercase tracking-[0.16em] text-[#1E3A2B]">Pengelompokan Academy per Departemen</p><h2 className="mt-1 text-2xl font-bold text-slate-900">{selectedBatch.name}</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Departemen final ditetapkan oleh admin. Minat kandidat hanya menjadi referensi dan tidak mengubah penempatan secara otomatis.</p></div><span className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-[#1E3A2B]">{candidates.length} kandidat · {activePersonnel.length} personel aktif</span></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="management-eyebrow text-xs font-bold uppercase tracking-[0.16em] text-[#1E3A2B]">Pengelompokan Academy per Departemen</p><h2 className="mt-1 text-2xl font-bold text-slate-900">{selectedBatch.name}</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Departemen final ditetapkan oleh admin. Minat kandidat hanya menjadi referensi dan tidak mengubah penempatan secara otomatis.</p></div><span className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-[#1E3A2B]">{academyCandidates.length} kandidat · {activePersonnel.length} personel aktif</span></div>
     </section>
     <section aria-label="Sub-menu manajemen" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {[
-        ['groups', 'Departemen Academy', `${['LSPD', 'LSSD', 'DOC'].filter((department) => candidates.some((candidate) => departmentForCandidate(candidate) === department)).length} departemen`, 'Kelompok otomatis atau manual'],
+        ['groups', 'Departemen Academy', `${['LSPD', 'LSSD', 'DOC', ''].filter((department) => academyCandidates.some((candidate) => departmentForCandidate(candidate) === department)).length} departemen`, 'Kelompok otomatis atau manual'],
         ['candidates', 'Data Kandidat', `${data.candidates.length} data`, 'Edit, hapus, dan pulihkan kandidat'],
         ['personnel', 'Akses Staff', `${activePersonnel.length} personel aktif`, 'Kelola identitas, PIN, dan peran'],
         ['blacklist', 'Daftar Blacklist', `${(data.blacklist || []).length} kandidat`, 'Kelola identitas dan catatan alasan'],
@@ -414,14 +418,14 @@ export default function RecruitmentManagementPage() {
       <section className="space-y-3 xl:sticky xl:top-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Filter Kandidat</p><h3 className="mt-1 text-lg font-bold text-slate-900">Departemen</h3></div><span className="text-xs text-slate-500">{visibleCandidates.length} tampil</span></div>
-          <div className="mt-3 grid grid-cols-2 gap-2">{['LSPD', 'LSSD', 'DOC', 'UNSET'].map((department) => { const label = department === 'UNSET' ? 'Belum ditentukan' : department; const count = candidates.filter((candidate) => departmentForCandidate(candidate) === (department === 'UNSET' ? '' : department)).length; const filterValue = `DEPT:${department === 'UNSET' ? '' : department}`; const selected = candidateFilter === filterValue; return <button key={department} type="button" aria-pressed={selected} onClick={() => setCandidateFilter(selected ? 'ALL' : filterValue)} className={`flex min-h-16 flex-col items-start justify-between rounded-xl border p-3 text-left transition ${selected ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200' : 'border-slate-200 bg-white hover:border-emerald-300'}`}><strong className="text-sm text-slate-800">{label}</strong><span className="text-xs font-semibold text-slate-500">{count} kandidat</span></button>; })}</div>
+          <div className="mt-3 grid grid-cols-2 gap-2">{['LSPD', 'LSSD', 'DOC', 'UNSET'].map((department) => { const label = department === 'UNSET' ? 'Belum ditentukan' : department; const value = department === 'UNSET' ? '' : department; const count = academyCandidates.filter((candidate) => departmentForCandidate(candidate) === value).length; const filterValue = `DEPT:${value}`; const selected = candidateFilter === filterValue; return <button key={department} type="button" aria-pressed={selected} onClick={() => setCandidateFilter(selected ? 'ALL' : filterValue)} className={`flex min-h-16 flex-col items-start justify-between rounded-xl border p-3 text-left transition ${selected ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200' : 'border-slate-200 bg-white hover:border-emerald-300'}`}><strong className="text-sm text-slate-800">{label}</strong><span className="text-xs font-semibold text-slate-500">{count} kandidat</span></button>; })}</div>
 
         </div>
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Panel Kandidat</p><h3 className="mt-1 text-lg font-bold text-slate-900">Kandidat · {candidates.length}</h3><p className="mt-1 text-xs text-slate-500">Pilih penetapan final manual per kartu atau gunakan aksi massal. Preferensi selalu ditampilkan sebagai referensi.</p></div><label className="w-full sm:max-w-xs"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari kandidat</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ketik nama kandidat…" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Panel Kandidat</p><h3 className="mt-1 text-lg font-bold text-slate-900">Kandidat · {academyCandidates.length}</h3><p className="mt-1 text-xs text-slate-500">Hanya kandidat lulus interview ditampilkan; departemen tanpa kategori LSPD, LSSD, atau DOC masuk ke Belum ditentukan.</p></div><label className="w-full sm:max-w-xs"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari kandidat</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ketik nama kandidat…" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>
           {selectedCandidateIds.length > 0 && <div className="mt-4 flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 sm:flex-row sm:items-center sm:justify-between"><span className="text-sm font-semibold text-emerald-900">{selectedCandidateIds.length} kandidat dipilih</span><div className="flex flex-wrap items-center gap-2"><label className="sr-only" htmlFor="bulk-candidate-department">Departemen final untuk kandidat terpilih</label><select id="bulk-candidate-department" value={bulkDepartment} onChange={(event) => setBulkDepartment(event.target.value)} className="min-w-40 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm"><option value="">Pilih departemen final…</option><option value="LSPD">LSPD</option><option value="LSSD">LSSD</option><option value="DOC">DOC</option><option value="__UNSET__">Kosongkan penetapan</option></select><button type="button" disabled={bulkSaving || loading || !bulkDepartment} onClick={assignSelectedCandidates} className="rounded-lg bg-[#1E3A2B] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{bulkSaving ? 'Menyimpan…' : 'Terapkan pilihan manual'}</button><button type="button" disabled={bulkSaving || loading || !selectedCandidateIds.some((id) => ['LSPD', 'LSSD', 'DOC'].includes(String(candidates.find((candidate) => String(candidate.id) === id)?.dept_preference || '').toUpperCase()))} onClick={assignSelectedByPreference} className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-bold text-emerald-900 disabled:cursor-not-allowed disabled:opacity-45">Tetapkan sesuai minat</button><button type="button" onClick={() => setSelectedCandidateIds([])} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Batal pilih</button></div></div>}
         </div>
         {loading ? <div className="p-14 text-center text-sm text-slate-500">Memuat seluruh kandidat batch…</div> : <div className="space-y-2 p-3 sm:p-4">

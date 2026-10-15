@@ -17,14 +17,18 @@ export async function GET(request) {
   const academyOpen = now >= Date.parse(batch.academy_start) && now <= Date.parse(batch.academy_end);
   if (session.role === 'STAFF' && !academyOpen) return NextResponse.json({ success:false,error:'Akses Academy hanya tersedia selama jadwal batch berlangsung.' },{status:403});
   const [candidateResult, attendanceResult, personnelResult] = await Promise.all([
-    db.from('candidates').select('id,nama,batch_id,mapping_dept,dept_preference').eq('batch_id', batchId).is('deleted_at', null).order('nama'),
+    db.from('candidates').select('id,nama,batch_id,mapping_dept,dept_preference,status_interview,status_cv').eq('batch_id', batchId).eq('status_interview', 'Passed').is('deleted_at', null).order('nama'),
     db.from('academy_attendance').select('*').eq('batch_id', batchId),
     db.from('rnt_personnel').select('id,full_name,department').eq('is_active', true).order('full_name'),
   ]);
   const failure = [candidateResult, attendanceResult, personnelResult].find((result) => result.error);
   if (failure) return NextResponse.json({ success:false,error:'Daftar absensi Academy gagal dimuat.' },{status:503});
   const personnel = personnelResult.data || [];
-  return NextResponse.json({ success:true,batches:[batch],candidates:candidateResult.data || [],attendance:attendanceResult.data || [],personnel,department:personnel.find((person) => person.id === session.personnelId)?.department || '',role:session.role,personnelId:session.personnelId },{headers:{'Cache-Control':'private, no-store, max-age=0'}});
+  const eligibleCandidates = (candidateResult.data || []).filter((candidate) => {
+    const cvStatus = String(candidate.status_cv || '').trim().toLowerCase();
+    return cvStatus && !['pending', 'rejected', 'belum direview', 'belum di-review'].includes(cvStatus);
+  });
+  return NextResponse.json({ success:true,batches:[batch],candidates:eligibleCandidates,attendance:attendanceResult.data || [],personnel,department:personnel.find((person) => person.id === session.personnelId)?.department || '',role:session.role,personnelId:session.personnelId },{headers:{'Cache-Control':'private, no-store, max-age=0'}});
 }
 
 export async function POST(request) {
@@ -39,9 +43,11 @@ export async function POST(request) {
   if (!validBody.success) return NextResponse.json({success:false,error:'Data absensi tidak valid.'},{status:400});
   const { candidateId, batchId, status } = validBody.data;
   const db = createInternalDataClient(session);
-  const { data: candidate, error: candidateError } = await db.from('candidates').select('nama,batch_id,mapping_dept,dept_preference').eq('id', candidateId).is('deleted_at', null).maybeSingle();
+  const { data: candidate, error: candidateError } = await db.from('candidates').select('nama,batch_id,mapping_dept,dept_preference,status_interview,status_cv').eq('id', candidateId).is('deleted_at', null).maybeSingle();
   if (candidateError) return NextResponse.json({success:false,error:'Kandidat gagal diverifikasi.'},{status:503});
   if (!candidate || candidate.batch_id !== batchId) return NextResponse.json({success:false,error:'Kandidat tidak ditemukan pada batch ini.'},{status:404});
+  const cvStatus = String(candidate.status_cv || '').trim().toLowerCase();
+  if (candidate.status_interview !== 'Passed' || !cvStatus || ['pending', 'rejected', 'belum direview', 'belum di-review'].includes(cvStatus)) return NextResponse.json({success:false,error:'Kandidat belum memenuhi syarat Academy.'},{status:403});
   if (session.role === 'STAFF') {
     const access = await checkCandidateStageWindow(db, candidateId, 'academy');
     if (!access.allowed) return NextResponse.json({success:false,error:access.message},{status:access.status});
