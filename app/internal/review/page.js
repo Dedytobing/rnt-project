@@ -3,6 +3,7 @@ import { useState, useEffect, useContext, useRef } from 'react';
 import CandidateLogs from '../components/CandidateLogs';
 import Pagination, { PAGE_SIZE } from '../components/Pagination';
 import { BatchContext, candidatesUrl } from '../BatchContext';
+import { DECLINED_REASON_OPTIONS, createDeclinedBbcode } from '@/lib/interview-declined-template';
 
 const PENDING_REASON_OPTIONS = [
   {
@@ -86,7 +87,7 @@ ${signature || 'Recruitment Staff'}[/right]
 [/divbox]`;
 }
 
-function createRejectedBbcode(candidate, staffProfile) {
+function createStandardRejectedBbcode(candidate, staffProfile, rejectionReason = '') {
   const salutation = candidate.gender === 'Female' ? 'Mrs.' : 'Mr.';
   const departmentNames = {
     LSSD: "Los Santos Sheriff's Department",
@@ -106,7 +107,7 @@ Dear ${salutation} ${candidate.nama},
 
 Thank you for taking the time to submit your application to the Law Enforcement Officer. After careful review, we regret to inform you that your application has been [b][color=#FF0000]REJECTED[/color][/b].
 
-Unfortunately, it did not meet one or more of the required criteria to proceed further in the recruitment process. This may include incomplete information, failure to meet the writing standards, or other eligibility concerns.
+${rejectionReason ? `The reason for this decision is: [b]${rejectionReason}[/b].` : 'Unfortunately, it did not meet one or more of the required criteria to proceed further in the recruitment process. This may include incomplete information, failure to meet the writing standards, or other eligibility concerns.'}
 
 You are welcome to reapply during the next recruitment batch, once all necessary corrections or improvements have been made. We appreciate your interest in joining the department and encourage you to use this as a learning experience for future opportunities.
 
@@ -183,10 +184,19 @@ export default function ReviewPage() {
   const [validationError, setValidationError] = useState('');
   const [pendingReasonsByCandidate, setPendingReasonsByCandidate] = useState({});
   const [customPendingReasonByCandidate, setCustomPendingReasonByCandidate] = useState({});
+  const [rejectedReasonByCandidate, setRejectedReasonByCandidate] = useState({});
+  const [currentTime, setCurrentTime] = useState(null);
   const [staffProfile, setStaffProfile] = useState({ name: '', rank: '', position: '', department: '' });
   const [copyMessage, setCopyMessage] = useState('');
   const [stageAccessError, setStageAccessError] = useState('');
   const reviewPreviewRef = useRef(null);
+
+  useEffect(() => {
+    const updateTime = () => setCurrentTime(Date.now());
+    updateTime();
+    const timer = window.setInterval(updateTime, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     fetch('/api/internal/session')
@@ -271,6 +281,7 @@ export default function ReviewPage() {
     const missingFields = [];
     if (!form.statusCv) missingFields.push('Status CV');
     if (!form.mdtCheck) missingFields.push('MDT Check');
+    if (form.statusCv === 'Rejected' && interviewScheduleStarted && !selectedRejectedReason) missingFields.push('Reason Declined');
     if (form.statusCv === 'Pending' && !hasPendingReasons) missingFields.push('minimal satu alasan untuk template Pending');
     if (isCvNoteRequired && !form.catatan.trim()) {
       missingFields.push(`Catatan Evaluator (karena Status CV = [${form.statusCv}])`);
@@ -317,11 +328,21 @@ export default function ReviewPage() {
     : candidates.find(c => c.id === selectedId);
   const selectedPendingReasons = selectedCand ? pendingReasonsByCandidate[selectedCand.id] || [] : [];
   const selectedCustomPendingReason = selectedCand ? customPendingReasonByCandidate[selectedCand.id] || '' : '';
+  const interviewStartTime = Date.parse(selectedBatch?.interview_start || '');
+  const interviewScheduleStarted = currentTime !== null && Number.isFinite(interviewStartTime) && currentTime >= interviewStartTime;
+  const rejectedReasonOptions = interviewScheduleStarted ? DECLINED_REASON_OPTIONS : [];
+  const savedRejectedReason = selectedCand ? rejectedReasonByCandidate[selectedCand.id] : '';
+  const selectedRejectedReason = rejectedReasonOptions.some((reason) => reason.id === savedRejectedReason)
+    ? savedRejectedReason
+    : '';
+  const rejectionReasonText = rejectedReasonOptions.find((reason) => reason.id === selectedRejectedReason)?.text || '';
   const pendingBbcode = selectedCand && form.statusCv === 'Pending'
     ? createPendingBbcode(selectedCand, selectedPendingReasons, selectedCustomPendingReason, staffProfile)
     : '';
   const rejectedBbcode = selectedCand && form.statusCv === 'Rejected'
-    ? createRejectedBbcode(selectedCand, staffProfile)
+    ? interviewScheduleStarted
+      ? rejectionReasonText ? createDeclinedBbcode(selectedCand, rejectionReasonText, staffProfile) : ''
+      : createStandardRejectedBbcode(selectedCand, staffProfile, rejectionReasonText)
     : '';
   const interviewSchedule = formatInterviewSchedule(selectedBatch);
   const acceptedBbcode = selectedCand && form.statusCv === 'Interview'
@@ -615,6 +636,23 @@ export default function ReviewPage() {
                   placeholder={isMdtNoteRequired ? `Jelaskan temuan kejahatan/rekam jejak terkait MDT Check ${form.mdtCheck}...` : "Hasil temuan investigasi jika ada..."}></textarea>
               </div>
 
+              {form.statusCv === 'Rejected' && interviewScheduleStarted && <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700" htmlFor="rejected-review-reason">Reason Declined</label>
+                <select
+                  id="rejected-review-reason"
+                  className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm font-semibold text-slate-800 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20"
+                  value={selectedRejectedReason}
+                  onChange={(event) => {
+                    if (!selectedCand) return;
+                    setRejectedReasonByCandidate((current) => ({ ...current, [selectedCand.id]: event.target.value }));
+                    setCopyMessage('');
+                  }}
+                >
+                  {interviewScheduleStarted && <option value="" disabled>Pilih alasan penolakan</option>}
+                  {rejectedReasonOptions.map((reason) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}
+                </select>
+              </div>}
+
               <button 
                 disabled={loading} 
                 type="submit" 
@@ -625,8 +663,8 @@ export default function ReviewPage() {
               <section className="pending-template-card" aria-labelledby="review-template-title">
                 <div className="pending-template-heading">
                   <div>
-                    <h3 id="review-template-title">Pratinjau BBCode{form.statusCv ? ` · ${form.statusCv === 'Interview' ? 'Accepted' : form.statusCv === 'Rejected' ? 'Declined' : form.statusCv}` : ''}</h3>
-                    <p>{form.statusCv ? 'Template hasil evaluasi tersusun otomatis dari data kandidat dan profil petugas.' : 'Pilih status CV untuk menyiapkan template hasil evaluasi.'}</p>
+                    <h3 id="review-template-title">{form.statusCv === 'Rejected' && interviewScheduleStarted ? 'Template balasan Declined' : `Pratinjau BBCode${form.statusCv ? ` · ${form.statusCv === 'Interview' ? 'Accepted' : form.statusCv === 'Rejected' ? 'Declined' : form.statusCv}` : ''}`}</h3>
+                    <p>{form.statusCv === 'Rejected' && interviewScheduleStarted ? 'Pilih alasan penolakan. BBCode akan diperbarui otomatis untuk kandidat ini.' : form.statusCv ? 'Template hasil evaluasi tersusun otomatis dari data kandidat dan profil petugas.' : 'Pilih status CV untuk menyiapkan template hasil evaluasi.'}</p>
                   </div>
                   <span className={form.statusCv === 'Pending' ? 'pending-template-badge' : form.statusCv === 'Interview' ? 'accepted-template-badge' : form.statusCv === 'Rejected' ? 'rejected-template-badge' : 'pending-template-badge'}>
                     {form.statusCv === 'Interview' ? 'ACCEPTED' : form.statusCv === 'Rejected' ? 'DECLINED' : form.statusCv === 'Pending' ? 'PENDING' : 'BELUM DIPILIH'}
@@ -666,7 +704,7 @@ export default function ReviewPage() {
                 <label className="pending-bbcode-label" htmlFor="review-bbcode-preview">Pratinjau BBCode</label>
                 <textarea ref={reviewPreviewRef} id="review-bbcode-preview" className="pending-bbcode-preview" rows="12" readOnly value={reviewBbcode} />
                 <div className="pending-template-actions">
-                  <span role="status" aria-live="polite">{copyMessage || (!form.statusCv ? 'Pilih status CV untuk menampilkan template.' : form.statusCv === 'Pending' ? (hasPendingReasons ? 'Nama kandidat dan staff dimasukkan otomatis.' : 'Pilih minimal satu alasan sebelum menyalin.') : form.statusCv === 'Rejected' ? 'Nama kandidat, jabatan, dan departemen staf dimasukkan otomatis.' : (interviewSchedule.available ? 'Nama kandidat, jadwal, dan signature petugas dimasukkan otomatis.' : 'Jadwal wawancara batch aktif belum dikonfigurasi.'))}</span>
+                  <span role="status" aria-live="polite">{copyMessage || (!form.statusCv ? 'Pilih status CV untuk menampilkan template.' : form.statusCv === 'Pending' ? (hasPendingReasons ? 'Nama kandidat dan staff dimasukkan otomatis.' : 'Pilih minimal satu alasan sebelum menyalin.') : form.statusCv === 'Rejected' ? (interviewScheduleStarted && !selectedRejectedReason ? 'Pilih alasan penolakan untuk membuat template Declined.' : 'Nama kandidat, alasan, dan signature petugas dimasukkan otomatis.') : (interviewSchedule.available ? 'Nama kandidat, jadwal, dan signature petugas dimasukkan otomatis.' : 'Jadwal wawancara batch aktif belum dikonfigurasi.'))}</span>
                   <button type="button" onClick={() => copyReviewBbcode(reviewPreviewRef)} disabled={!reviewBbcode || (form.statusCv === 'Pending' && !hasPendingReasons) || (form.statusCv === 'Interview' && !interviewSchedule.available)}>
                     {copyMessage.includes('berhasil disalin') ? 'Tersalin ✓' : 'Salin Kode (Copy BBCode)'}
                   </button>

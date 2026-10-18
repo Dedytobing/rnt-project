@@ -52,7 +52,7 @@ export async function GET(request) {
     const [personnel, whitelist, candidates, blacklist] = await Promise.all([
       db.from('rnt_personnel').select('id,full_name,normalized_name,role,rank,position,department,is_active').order('full_name'),
       db.from('rnt_personnel_name_whitelist').select('id,full_name,normalized_name,role,is_active,created_at').order('full_name'),
-      db.from('candidates').select('id,nama,link_cv,batch_id,deleted_at,deleted_by,status_cv,status_interview,mdt_check,catatan,notes_investigator,notes_interviewer,created_at,mapping_dept,dept_preference').eq('batch_id', batchId.data).order('created_at', { ascending: false }),
+      db.from('candidates').select('id,nama,gender,link_cv,batch_id,deleted_at,deleted_by,status_cv,status_interview,mdt_check,catatan,notes_investigator,notes_interviewer,created_at,mapping_dept,dept_preference').eq('batch_id', batchId.data).order('created_at', { ascending: false }),
       db.from('candidate_blacklist').select('id,full_name,normalized_name,reason,created_at,updated_at').order('full_name'),
     ]);
     const failed = [personnel, whitelist, candidates, blacklist].find((result) => result.error);

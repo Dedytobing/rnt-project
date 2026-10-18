@@ -58,7 +58,10 @@ export async function GET(request) {
       const { data: stageBatch, error: stageError } = await supabase.from('recruitment_batches').select(`${query.data.stage}_start,${query.data.stage}_end`).eq('id', batchId).is('deleted_at', null).maybeSingle();
       if (stageError || !stageBatch) return NextResponse.json({ success: false, error: 'Jadwal tahap gagal diverifikasi.' }, { status: 503 });
       const now = Date.now();
-      if (now < Date.parse(stageBatch[`${query.data.stage}_start`]) || now > Date.parse(stageBatch[`${query.data.stage}_end`])) {
+      const stageStart = Date.parse(stageBatch[`${query.data.stage}_start`]);
+      const stageEnd = Date.parse(stageBatch[`${query.data.stage}_end`]);
+      const reviewTemplateAfterDeadline = query.data.stage === 'review' && Number.isFinite(stageEnd) && now > stageEnd;
+      if (now < stageStart || (now > stageEnd && !reviewTemplateAfterDeadline)) {
         return NextResponse.json({ success: false, error: `Akses ${query.data.stage} belum dibuka atau sudah ditutup sesuai jadwal batch.` }, { status: 403 });
       }
     }
@@ -260,9 +263,9 @@ export async function POST(request) {
       if (session?.role !== 'ADMIN') {
         return NextResponse.json({ success: false, error: 'Hanya Team RED yang dapat mengubah keputusan akhir.' }, { status: 403 });
       }
-      const { id, nama, linkCv, statusCv, mdtCheck, mappingDept, statusInterview, catatan, notesInvestigator, notesInterviewer, departmentOnly } = body;
+      const { id, nama, gender, linkCv, statusCv, mdtCheck, mappingDept, statusInterview, catatan, notesInvestigator, notesInterviewer, departmentOnly } = body;
 
-      if (mappingDept && !['LSSD', 'LSPD', 'DOC'].includes(mappingDept)) {
+      if (mappingDept !== undefined && !['', 'LSSD', 'LSPD', 'DOC'].includes(mappingDept)) {
         return NextResponse.json({ success: false, error: 'Departemen final tidak valid.' }, { status: 400 });
       }
 
@@ -292,18 +295,23 @@ export async function POST(request) {
         return NextResponse.json({ success: true, message: `Penempatan final ${candidate.nama} diperbarui ke ${mappingDept}.` });
       }
 
+      if (gender !== undefined && !['', 'Male', 'Female'].includes(gender)) {
+        return NextResponse.json({ success: false, error: 'Gender tidak valid.' }, { status: 400 });
+      }
+
       const updates = {
         nama,
+        ...(gender !== undefined ? { gender: gender || null } : {}),
         ...(linkCv ? { link_cv: linkCv } : {}),
-        status_cv: statusCv,
+        status_cv: statusCv || null,
         mdt_check: mdtCheck,
-        status_interview: statusInterview,
+        status_interview: statusInterview || null,
         catatan,
         notes_investigator: notesInvestigator,
         notes_interviewer: notesInterviewer,
         updated_at: new Date()
       };
-      if (mappingDept) updates.mapping_dept = mappingDept;
+      if (mappingDept !== undefined) updates.mapping_dept = mappingDept || null;
 
       const { error } = await supabase.from('candidates').update(updates).eq('id', id);
 

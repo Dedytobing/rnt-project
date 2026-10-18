@@ -44,6 +44,20 @@ function formatDateTime(value) {
   }).format(parsed);
 }
 
+function formatSystemServerTime(timestamp) {
+  const dateParts = new Intl.DateTimeFormat('id-ID', {
+    day: '2-digit', month: 'short', timeZone: BUSINESS_TIME_ZONE,
+  }).formatToParts(timestamp);
+  const timeParts = new Intl.DateTimeFormat('id-ID', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: BUSINESS_TIME_ZONE,
+  }).formatToParts(timestamp);
+  const partValue = (parts, type) => parts.find((part) => part.type === type)?.value || '';
+  return {
+    time: `${partValue(timeParts, 'hour')}:${partValue(timeParts, 'minute')}:${partValue(timeParts, 'second')}`,
+    date: `${partValue(dateParts, 'day')} ${partValue(dateParts, 'month')}`,
+  };
+}
+
 function toDateTimeInput(value) {
   if (!value) return '';
   const parts = new Intl.DateTimeFormat('en-GB', {
@@ -159,10 +173,38 @@ function InternalLayoutContent({ children }) {
   const [batchForm, setBatchForm] = useState({});
   const [batchSaving, setBatchSaving] = useState(false);
   const [batchFormError, setBatchFormError] = useState('');
+  const [serverClockNow, setServerClockNow] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
   const initialPathnameRef = useRef(pathname);
+  useEffect(() => {
+    let active = true;
+    let serverOffset = null;
+    const syncServerTime = async () => {
+      const requestStartedAt = performance.now();
+      try {
+        const response = await fetch('/api/internal/server-time', { cache: 'no-store' });
+        const result = await response.json();
+        const responseReceivedAt = performance.now();
+        if (!response.ok || !Number.isFinite(result.serverTime)) throw new Error('Server time unavailable');
+        serverOffset = result.serverTime - (requestStartedAt + responseReceivedAt) / 2;
+        if (active) setServerClockNow(responseReceivedAt + serverOffset);
+      } catch {
+        if (active && serverOffset === null) setServerClockNow(null);
+      }
+    };
+    void syncServerTime();
+    const ticker = window.setInterval(() => {
+      if (active && serverOffset !== null) setServerClockNow(performance.now() + serverOffset);
+    }, 1000);
+    const resync = window.setInterval(() => { void syncServerTime(); }, 60000);
+    return () => {
+      active = false;
+      window.clearInterval(ticker);
+      window.clearInterval(resync);
+    };
+  }, []);
   useEffect(() => {
     if (!roleToast) return undefined;
     const timer = window.setTimeout(() => setRoleToast(null), 4000);
@@ -329,6 +371,7 @@ function InternalLayoutContent({ children }) {
   }, [userMenuOpen]);
 
   const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) || null;
+  const serverClockDisplay = serverClockNow === null ? null : formatSystemServerTime(serverClockNow);
 
   const chooseBatch = (batchId) => {
     const batch = batches.find((item) => item.id === batchId);
@@ -840,7 +883,6 @@ function InternalLayoutContent({ children }) {
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/review` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'review' || pathname === '/internal/review' ? 'active' : ''}`}><span>⌕</span>Review CV</Link>
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/interview` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'interview' || pathname === '/internal/interview' ? 'active' : ''}`}><span>◷</span>Interview panel</Link>
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/absensi` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'absensi' || routeSection === 'academy' || pathname === '/internal/academy' ? 'active' : ''}`}><span>✓</span>Absensi Academy</Link>
-            <Link href={`/candidate?source=internal&returnTo=${encodeURIComponent(pathname)}`} className="staff-nav-link"><span>＋</span>Input kandidat</Link>
             {userRole === 'ADMIN' && <>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/audit-log` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'audit-log' || pathname === '/internal/audit-logs' ? 'active' : ''}`}><span>≡</span>Audit log<span className="nav-admin-tag">RNT</span></Link>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/management` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'management' || pathname === '/internal/management' ? 'active' : ''}`}><span>⚙</span>Manajemen<span className="nav-admin-tag">RNT</span></Link>
@@ -867,7 +909,7 @@ function InternalLayoutContent({ children }) {
       <main className="flex-1 staff-main">
         <header className="staff-topbar">
           <div><div className="staff-breadcrumb">RNT PROJECT <span>/</span> PERSONNEL</div><h1>{pageTitle}</h1><p>{pageSubtitle}</p></div>
-          <div className="staff-top-actions"><span className="staff-live"><i /> SISTEM AKTIF</span>{selectedBatch && <button type="button" onClick={() => setShowBatchPicker(true)} className="staff-batch-switcher rounded-lg border border-[#1E3A2B]/20 bg-white px-3 py-2 text-xs font-bold text-[#1E3A2B] hover:bg-[#edf4ee]">Batch: {selectedBatch.name} · Ganti</button>}<Link href={`/candidate?source=internal&returnTo=${encodeURIComponent(pathname)}`} className="staff-new-candidate"><span>＋</span> Kandidat baru</Link></div>
+          <div className="staff-top-actions inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200/60 bg-slate-100/80 p-1.5 dark:border-emerald-800/40 dark:bg-emerald-950/40"><div className="server-time-widget inline-flex min-w-0 items-center gap-2 px-2" aria-label="Waktu server sistem, zona waktu WIB" title="Waktu server sistem · Asia/Jakarta"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-emerald-300"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" /><path d="M12 7v5l3.2 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg><span className="font-mono text-[11px] font-medium tabular-nums text-slate-700 dark:text-emerald-300">{serverClockDisplay?.time || '--:--:--'}</span><span aria-hidden="true" className="text-[10px] text-slate-400 dark:text-emerald-800/80">·</span><span className="server-time-date whitespace-nowrap text-[9px] text-slate-500 dark:text-emerald-300/80">{serverClockDisplay?.date || 'Menyinkronkan…'}</span></div><span className="staff-live"><i /> SISTEM AKTIF</span>{selectedBatch && <button type="button" aria-label={`Ganti batch aktif, saat ini ${selectedBatch.name}`} onClick={() => setShowBatchPicker(true)} className="staff-batch-switcher inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-slate-200/60 bg-white/60 px-2.5 py-1 text-[10px] font-medium text-slate-700 hover:bg-white dark:border-emerald-800/40 dark:bg-emerald-950/20 dark:text-emerald-200 dark:hover:bg-emerald-900/40"><span className="text-slate-500 dark:text-emerald-300/70">Batch:</span><span className="truncate">{selectedBatch.name}</span><svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-emerald-300/70"><path d="m5.5 7.5 4.5 4 4.5-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></button>}<Link href={`/candidate?source=internal&returnTo=${encodeURIComponent(pathname)}`} className="staff-new-candidate rounded-md px-2.5 py-1.5 text-[10px]"><span>＋</span> Kandidat baru</Link></div>
         </header>
         <div className="staff-content">{children}</div>
       </main>
