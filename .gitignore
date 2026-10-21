@@ -53,3 +53,5 @@ next-env.d.ts
 !/supabase/migrations/20261023040000_department_source_of_truth.sql
 !/supabase/migrations/20261024000000_candidate_blacklist.sql
 !/supabase/migrations/20261025000000_dynamic_batch_registration_window.sql
+!/supabase/migrations/20261026000000_registration_grace_period.sql
+!/supabase/migrations/20261028000000_registration_access_scope.sql

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
+import { isStageWindowOpen } from '@/lib/stage-access';
 
 export async function GET(request) {
   const session = getInternalSession(request);
@@ -17,7 +18,7 @@ export async function GET(request) {
   if (error) return NextResponse.json({ success: false, error: 'Batch gagal diverifikasi.' }, { status: 503 });
   if (!batch) return NextResponse.json({ success: false, error: 'Batch tidak ditemukan.' }, { status: 404 });
   const now = Date.now();
-  if (session.role === 'STAFF' && (now < Date.parse(batch.academy_start) || now > Date.parse(batch.academy_end))) {
+  if (session.role === 'STAFF' && !isStageWindowOpen(batch.academy_start, batch.academy_end, now)) {
     return NextResponse.json({ success: false, error: 'Akses Academy hanya tersedia selama jadwal batch berlangsung.' }, { status: 403 });
   }
 

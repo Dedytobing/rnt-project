@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
-import { checkCandidateStageWindow } from '@/lib/stage-access';
+import { checkCandidateStageWindow, isStageWindowOpen } from '@/lib/stage-access';
 import { z } from 'zod';
 
 export async function GET(request) {
@@ -14,7 +14,7 @@ export async function GET(request) {
   if (error) return NextResponse.json({ success:false,error:'Jadwal Academy gagal dimuat.' },{status:503});
   const now = Date.now();
   if (!batch) return NextResponse.json({ success:false,error:'Batch tidak ditemukan.' },{status:404});
-  const academyOpen = now >= Date.parse(batch.academy_start) && now <= Date.parse(batch.academy_end);
+  const academyOpen = isStageWindowOpen(batch.academy_start, batch.academy_end, now);
   if (session.role === 'STAFF' && !academyOpen) return NextResponse.json({ success:false,error:'Akses Academy hanya tersedia selama jadwal batch berlangsung.' },{status:403});
   const [candidateResult, attendanceResult, personnelResult] = await Promise.all([
     db.from('candidates').select('id,nama,batch_id,mapping_dept,dept_preference,status_interview,status_cv').eq('batch_id', batchId).eq('status_interview', 'Passed').is('deleted_at', null).order('nama'),

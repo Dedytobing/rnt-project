@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import { appendReviewerName } from '@/lib/reviewers';
 import { isCandidateServiceConfigured, registerCandidate } from '@/lib/candidate-registration';
 import { getInternalSession } from '@/lib/internal-session';
-import { createInternalDataClient } from '@/lib/supabase-server';
+import { createInternalDataClient, createServiceRoleClient } from '@/lib/supabase-server';
 import { candidateActionSchema, candidateQuerySchema, readValidatedJson } from '@/lib/validation';
 import { enforceRateLimit, rateLimitResponse } from '@/lib/rate-limit';
-import { checkCandidateStageWindow } from '@/lib/stage-access';
+import { checkCandidateStageWindow, isStageWindowOpen, STAGE_GRACE_PERIOD_MS } from '@/lib/stage-access';
 
 function isMissingPreferenceColumn(error) {
   return ['PGRST204', '42703'].includes(error?.code) &&
@@ -58,10 +58,7 @@ export async function GET(request) {
       const { data: stageBatch, error: stageError } = await supabase.from('recruitment_batches').select(`${query.data.stage}_start,${query.data.stage}_end`).eq('id', batchId).is('deleted_at', null).maybeSingle();
       if (stageError || !stageBatch) return NextResponse.json({ success: false, error: 'Jadwal tahap gagal diverifikasi.' }, { status: 503 });
       const now = Date.now();
-      const stageStart = Date.parse(stageBatch[`${query.data.stage}_start`]);
-      const stageEnd = Date.parse(stageBatch[`${query.data.stage}_end`]);
-      const reviewTemplateAfterDeadline = query.data.stage === 'review' && Number.isFinite(stageEnd) && now > stageEnd;
-      if (now < stageStart || (now > stageEnd && !reviewTemplateAfterDeadline)) {
+      if (!isStageWindowOpen(stageBatch[`${query.data.stage}_start`], stageBatch[`${query.data.stage}_end`], now)) {
         return NextResponse.json({ success: false, error: `Akses ${query.data.stage} belum dibuka atau sudah ditutup sesuai jadwal batch.` }, { status: 403 });
       }
     }
@@ -133,6 +130,12 @@ export async function POST(request) {
 
     // 1. TAMBAH KANDIDAT BARU (Public Form)
     if (action === 'ADD_CANDIDATE') {
+      if (internalSession) {
+        const origin = request.headers.get('origin');
+        if (origin && origin !== new URL(request.url).origin) {
+          return NextResponse.json({ success: false, error: 'Asal permintaan tidak valid.' }, { status: 403 });
+        }
+      }
       if (!internalSession) {
         const limited = await enforceRateLimit(request, { namespace: 'candidate-registration', limit: 5, windowSeconds: 60 * 60 });
         const rateError = rateLimitResponse(limited);
@@ -143,11 +146,21 @@ export async function POST(request) {
       }
 
       const { nama: candidateName, gender: candidateGender, linkCv: candidateCv, batchId } = body;
+      const registrationDb = internalSession ? createInternalDataClient(internalSession) : createServiceRoleClient();
+      const { data: batch, error: batchError } = await registrationDb.from('recruitment_batches')
+        .select('registration_start,registration_end').eq('id', batchId).is('deleted_at', null).maybeSingle();
+      if (batchError) return NextResponse.json({ success: false, error: 'Jadwal pendaftaran gagal diverifikasi.' }, { status: 503 });
+      if (!batch) return NextResponse.json({ success: false, error: 'Batch pendaftaran tidak ditemukan.' }, { status: 404 });
+      const gracePeriodMs = internalSession ? STAGE_GRACE_PERIOD_MS : 0;
+      if (!isStageWindowOpen(batch.registration_start, batch.registration_end, Date.now(), gracePeriodMs)) {
+        return NextResponse.json({ success: false, error: 'Pendaftaran batch ini sudah ditutup sesuai jadwal.' }, { status: 403 });
+      }
       const { data: registration, error } = await registerCandidate({
         name: candidateName,
         gender: candidateGender,
         cvUrl: candidateCv,
         batchId,
+        isInternal: Boolean(internalSession),
       });
 
       if (error) {

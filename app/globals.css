@@ -230,11 +230,13 @@ html[data-theme="dark"] .candidate-header, html[data-theme="dark"] .candidate-fo
 html[data-theme="dark"] .candidate-brand, html[data-theme="dark"] .candidate-form-heading h1, html[data-theme="dark"] .candidate-form label { color: #e4ece5; }
 html[data-theme="dark"] .candidate-brand small { color: #b8c9be; }
 html[data-theme="dark"] .candidate-form-heading > p:not(.candidate-announcement), html[data-theme="dark"] .candidate-field-hint { color: #cbd5d0 !important; }
-html[data-theme="dark"] .candidate-announcement { font-weight: 600; line-height: 1.55; }
+html[data-theme="dark"] .candidate-announcement { font-weight: 400; line-height: 1.55; }
 html[data-theme="dark"] .candidate-announcement.bg-emerald-50 { color: #d1fae5 !important; background: #123326 !important; border-color: #276749 !important; }
-html[data-theme="dark"] .candidate-announcement.bg-amber-50 { color: #fef3c7 !important; background: #3a3020 !important; border-color: #80621e !important; }
+html[data-theme="dark"] .candidate-announcement.bg-amber-50 { color: #fcd34d !important; background: rgb(69 26 3 / 40%) !important; border: 1px solid rgb(120 53 15 / 50%) !important; }
 html[data-theme="dark"] .candidate-form input, html[data-theme="dark"] .candidate-form select { color: #e4ece5; background: #111914; border-color: #46564a; }
-html[data-theme="dark"] .candidate-form input::placeholder { color: #829087; }
+html[data-theme="dark"] .candidate-form input::placeholder { color: #b7c5bb; }
+html[data-theme="dark"] .candidate-submit:disabled { opacity: 1; }
+html[data-theme="dark"] .candidate-alert.success { color: #6ee7b7; background: #022c22; border-color: #065f46; }
 html[data-theme="dark"] .candidate-footer { color: #87968b; }
 html[data-theme="dark"] .candidate-staff-link, html[data-theme="dark"] .candidate-staff-link span { color: #fff; }
 html[data-theme="dark"] .candidate-staff-link { background: #254532; border-color: #315842; }
@@ -242,7 +244,7 @@ html[data-theme="dark"] .candidate-staff-link:hover { color: #fff; background: #
 html[data-theme="dark"] .candidate-staff-link:hover span { color: #fff; }
 html[data-theme="dark"] .candidate-submit { color: #fff !important; background: #1f442e !important; font-weight: 600; }
 html[data-theme="dark"] .candidate-submit:hover:not(:disabled) { background: #2c5039 !important; }
-html[data-theme="dark"] .candidate-submit:disabled { background: #142a1d !important; }
+html[data-theme="dark"] .candidate-submit:disabled { color: rgb(4 120 87 / 60%) !important; background: rgb(2 44 34 / 60%) !important; border: 1px solid rgb(6 78 59 / 40%) !important; }
 .candidate-header > .candidate-brand, .candidate-header > .candidate-staff-link { align-self: center; }
 
 /* Shared staff portal surfaces, cards, and form controls */
@@ -854,6 +856,7 @@ html[data-theme="dark"] .detail-status-pill-slate { color: #d5e1d9 !important; b
 html[data-theme="dark"] .staff-content input::placeholder,
 html[data-theme="dark"] .staff-content textarea::placeholder,
 html[data-theme="dark"] .staff-content select:invalid { color: #b7c5bb !important; opacity: 1 !important; }
+html[data-theme="dark"] .staff-content .candidate-staff-info > div { color: #c5d4c9 !important; }
 
 /* Site-wide readable type floor. Compact text utilities are normalized across
    every staff module; spacing remains owned by each component. */
@@ -1202,3 +1205,41 @@ html[data-theme="dark"] .staff-login-card .staff-login-footer { color: #cbd5e1 !
   .staff-login-card .staff-login-departments > div { gap: 7px; }
   .staff-login-card .staff-login-department { min-height: 56px; padding: 9px 11px; }
 }
+
+/* Balanced candidate form spacing with natural page scrolling when needed. */
+.candidate-page { height: auto; min-height: 100vh; }
+.candidate-page .candidate-header { flex: 0 0 68px; height: 68px; }
+.candidate-page .candidate-form-wrap { width: min(calc(100% - 32px), 512px); height: auto; min-height: 0; margin: 36px auto 32px; padding: 24px !important; flex: 0 0 auto; }
+.candidate-page .candidate-form-heading { margin-bottom: 18px !important; }
+.candidate-page .candidate-form-heading h1 { margin: 8px 0 6px !important; font-size: 23px !important; line-height: 1.25; }
+.candidate-page .candidate-form-heading > p:not(.candidate-announcement) { line-height: 1.5 !important; }
+.candidate-page .candidate-form label { margin: 13px 0 6px !important; line-height: 1.4; }
+.candidate-page .candidate-form input,
+.candidate-page .candidate-form select { min-height: 42px !important; }
+.candidate-page .candidate-field-hint { margin-top: 5px !important; line-height: 1.45 !important; }
+.candidate-page .candidate-alert { margin-top: 12px !important; padding: 10px 12px !important; }
+.candidate-page .candidate-submit { min-height: 43px !important; margin-top: 17px !important; }
+.candidate-page .candidate-required-note { margin-top: 10px !important; line-height: 1.45 !important; }
+.candidate-page .candidate-footer { padding: 16px !important; }
+@media (min-width: 640px) {
+  .candidate-page .candidate-form-wrap { padding: 32px !important; }
+}
+@media (max-width: 560px) {
+  .candidate-page .candidate-header { flex-basis: 60px; height: 60px; }
+  .candidate-page .candidate-form-wrap { width: calc(100% - 24px); margin: 22px auto 26px; padding: 24px 20px 22px !important; }
+  .candidate-page .candidate-form-heading { margin-bottom: 16px !important; }
+  .candidate-page .candidate-form label { margin-top: 12px !important; }
+}
+.candidate-page .candidate-form label { color: #334155; font-size: 14px !important; font-weight: 500; }
+.candidate-page .candidate-form input,
+.candidate-page .candidate-form select { font-size: 14px !important; }
+.candidate-page .candidate-form input::placeholder,
+.candidate-page .candidate-form textarea::placeholder { font-size: 14px !important; }
+.candidate-page .candidate-form-heading > p:not(.candidate-announcement),
+.candidate-page .candidate-form-heading .candidate-announcement { font-size: 14px !important; }
+.candidate-page .candidate-form label { color: #1e293b; font-weight: 600; }
+.candidate-page .candidate-form-heading > p:not(.candidate-announcement) { max-width: 100%; }
+.candidate-page .candidate-announcement { font-size: 14px !important; font-weight: 500 !important; }
+.candidate-page .candidate-field-hint,
+.candidate-page .candidate-required-note { font-size: 12px !important; }
+html[data-theme="dark"] .candidate-page .candidate-form label { color: #e2e8f0 !important; }

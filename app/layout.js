@@ -15,7 +15,7 @@ export default function RootLayout({ children }) {
           {"try{if(localStorage.getItem('rnt-theme')==='dark')document.documentElement.dataset.theme='dark'}catch{}"}
         </Script>
       </head>
-      <body className="bg-slate-100 text-slate-900 antialiased">
+      <body className="bg-slate-100 text-slate-900 antialiased" suppressHydrationWarning>
         {children}
         <ThemeToggle />
       </body>

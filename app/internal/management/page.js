@@ -62,6 +62,7 @@ export default function RecruitmentManagementPage() {
   const [selectedCandidateIds, setSelectedCandidateIds] = useState([]);
   const [search, setSearch] = useState('');
   const [candidateFilter, setCandidateFilter] = useState('ALL');
+  const [genderFilter, setGenderFilter] = useState('ALL');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
@@ -137,7 +138,7 @@ export default function RecruitmentManagementPage() {
   const academyCandidates = useMemo(() => candidates.filter((candidate) => {
     const cvStatus = String(candidate.status_cv || '').trim().toLowerCase();
     return candidate.status_interview === 'Passed' && cvStatus && !['pending', 'rejected', 'belum direview', 'belum di-review'].includes(cvStatus);
-  }), [candidates, departmentForCandidate]);
+  }), [candidates]);
   const membersByGroup = useMemo(() => {
     const grouped = new Map();
     for (const member of data.groupMembers) {
@@ -162,7 +163,8 @@ export default function RecruitmentManagementPage() {
   const visibleCandidates = useMemo(() => academyCandidates
     .filter((candidate) => candidate.nama.toLowerCase().includes(normalizedSearch))
     .filter((candidate) => candidateFilter === 'ALL' || (candidateFilter.startsWith('DEPT:') && departmentForCandidate(candidate) === candidateFilter.slice(5)))
-    .sort((left, right) => left.nama.localeCompare(right.nama, 'id')), [academyCandidates, normalizedSearch, candidateFilter, departmentForCandidate]);
+    .filter((candidate) => genderFilter === 'ALL' || candidate.gender === genderFilter)
+    .sort((left, right) => left.nama.localeCompare(right.nama, 'id')), [academyCandidates, normalizedSearch, candidateFilter, genderFilter, departmentForCandidate]);
   const renderCandidate = (candidate) => {
     const key = String(candidate.id);
     const department = departmentForCandidate(candidate);
@@ -417,9 +419,8 @@ export default function RecruitmentManagementPage() {
     {activeModule === 'groups' && <div className="grid items-start gap-4 xl:grid-cols-[minmax(300px,0.85fr)_minmax(0,1.5fr)]">
       <section className="space-y-3 xl:sticky xl:top-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Filter Kandidat</p><h3 className="mt-1 text-lg font-bold text-slate-900">Departemen</h3></div><span className="text-xs text-slate-500">{visibleCandidates.length} tampil</span></div>
+          <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Filter Kandidat</p><h3 className="mt-1 text-lg font-bold text-slate-900">Departemen</h3></div><label className="min-w-32 flex-1 sm:max-w-40"><span className="mb-1 block text-[11px] font-semibold text-slate-600">Jenis kelamin</span><select aria-label="Filter berdasarkan jenis kelamin" value={genderFilter} onChange={(event) => setGenderFilter(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700"><option value="ALL">Semua</option><option value="Male">Laki-laki</option><option value="Female">Perempuan</option></select></label><span className="w-full text-right text-xs text-slate-500">{visibleCandidates.length} tampil</span></div>
           <div className="mt-3 grid grid-cols-2 gap-2">{['LSPD', 'LSSD', 'DOC', 'UNSET'].map((department) => { const label = department === 'UNSET' ? 'Belum ditentukan' : department; const value = department === 'UNSET' ? '' : department; const count = academyCandidates.filter((candidate) => departmentForCandidate(candidate) === value).length; const filterValue = `DEPT:${value}`; const selected = candidateFilter === filterValue; return <button key={department} type="button" aria-pressed={selected} onClick={() => setCandidateFilter(selected ? 'ALL' : filterValue)} className={`flex min-h-16 flex-col items-start justify-between rounded-xl border p-3 text-left transition ${selected ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200' : 'border-slate-200 bg-white hover:border-emerald-300'}`}><strong className="text-sm text-slate-800">{label}</strong><span className="text-xs font-semibold text-slate-500">{count} kandidat</span></button>; })}</div>
-
         </div>
       </section>
 

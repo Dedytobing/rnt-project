@@ -30,6 +30,7 @@ export default function CandidatePage() {
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [alert, setAlert] = useState({ show: false, msg: '', type: '' });
   const [activeBatch, setActiveBatch] = useState(null);
+  const [staffGraceActive, setStaffGraceActive] = useState(false);
   const [showPortalBack, setShowPortalBack] = useState(false);
   const [portalReturnTo, setPortalReturnTo] = useState('/internal/dashboard');
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -106,8 +107,8 @@ export default function CandidatePage() {
     let mounted = true;
     const refreshRegistrationWindow = () => {
       fetch('/api/batches', { cache: 'no-store' }).then((response) => response.json())
-        .then((data) => { if (mounted && data.success) setActiveBatch(data.batch); })
-        .catch(() => { if (mounted) setActiveBatch(null); });
+        .then((data) => { if (mounted && data.success) { setActiveBatch(data.batch); setStaffGraceActive(Boolean(data.staffGraceActive)); } })
+        .catch(() => { if (mounted) { setActiveBatch(null); setStaffGraceActive(false); } });
     };
     refreshRegistrationWindow();
     const timer = window.setInterval(refreshRegistrationWindow, 30_000);
@@ -150,12 +151,27 @@ export default function CandidatePage() {
       </header>
 
       <section className="candidate-form-wrap">
-        {showPortalBack && <button type="button" onClick={navigateBack} className="mb-5 inline-flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/80">← Kembali ke Portal</button>}
+        {showPortalBack && <button type="button" onClick={navigateBack} className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/80">← Kembali ke Portal</button>}
         <div className="candidate-form-heading">
           <span className="candidate-kicker">PENDAFTARAN KANDIDAT</span>
           <h1>Form kandidat baru</h1>
           <p>Isi data diri dan tautan thread CV forum untuk memulai proses seleksi.</p>
-          {activeBatch ? <p className="candidate-announcement mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Pendaftaran <strong>{publicBatchName(activeBatch.name)}</strong> resmi dibuka sampai {formatRegistrationDeadline(activeBatch.registration_end)}.</p> : <p className="candidate-announcement mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">Pendaftaran belum dibuka. Silakan kembali saat batch baru tersedia.</p>}
+          {activeBatch ? (
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <p className="candidate-announcement rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800 whitespace-nowrap sm:text-sm">
+                Batas Pendaftaran <strong>{publicBatchName(activeBatch.name)}</strong>: {formatRegistrationDeadline(activeBatch.registration_end)}
+              </p>
+              {staffGraceActive && (
+                <span title="Input internal tersedia hingga 24 jam setelah jadwal pendaftaran berakhir." className="inline-flex rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300">
+                  Akses Staff: Masa Tenggang H+1 Aktif
+                </span>
+              )}
+            </div>
+          ) : (
+            <p className="candidate-announcement mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 whitespace-nowrap dark:border dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300 sm:text-sm">
+              Pendaftaran belum dibuka. Kembali saat batch baru tersedia.
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleCandSubmit} className="candidate-form">
@@ -196,11 +212,11 @@ export default function CandidatePage() {
 
           {alert.show && <div role="status" aria-live="polite" className={`candidate-alert ${alert.type}`}>{cooldownSeconds > 0 && alert.msg.toLowerCase().includes('terlalu banyak mencoba') ? `Terlalu banyak mencoba. Silakan tunggu ${cooldownMessage} lagi.` : alert.msg}</div>}
 
-          <button className="candidate-submit" type="submit" disabled={loading || !activeBatch || cooldownSeconds > 0}>
+          <button className="candidate-submit dark:disabled:border dark:disabled:border-emerald-900/40 dark:disabled:bg-emerald-950/60 dark:disabled:text-emerald-700/60" type="submit" disabled={loading || !activeBatch || cooldownSeconds > 0}>
             {loading ? 'Mengirim pendaftaran…' : cooldownSeconds > 0 ? `Tunggu ${cooldownMessage}` : 'Kirim pendaftaran'}
             {!loading && <span aria-hidden="true">→</span>}
           </button>
-          <p className="candidate-required-note">Kolom bertanda * wajib diisi.</p>
+          <p className="candidate-required-note dark:text-slate-400">Kolom bertanda * wajib diisi.</p>
         </form>
       </section>
       {showCancelModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCancelModal(false); }}>

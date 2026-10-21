@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
+import { getBatchStatus } from '@/lib/batch-status';
 import { z } from 'zod';
 
 const iso = z.string().datetime({ offset: true });
@@ -75,7 +76,7 @@ export async function GET(request) {
     };
     const priority = (batch) => {
       if (batch.is_active) return 0;
-      return timestamp(batch.academy_end) < now ? 2 : 1;
+      return getBatchStatus(batch, now) === 'completed' ? 2 : 1;
     };
     const batches = [...(data || [])].sort((a, b) => {
       const groupDifference = priority(a) - priority(b);

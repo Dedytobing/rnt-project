@@ -43,6 +43,20 @@ function formatInterviewSchedule(batch) {
   };
 }
 
+function historyStatusBadgeClass(status) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (['accepted', 'passed', 'interview', 'lulus', 'lolos', 'lulus interview', 'cv diterima'].includes(normalized)) {
+    return 'border border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400';
+  }
+  if (['rejected', 'declined', 'failed', 'ditolak', 'gagal', 'tidak lulus interview', 'cv ditolak'].includes(normalized)) {
+    return 'border border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-400';
+  }
+  if (['pending', 'revision', 'revisi', 'menunggu', 'interview menunggu hasil', 'perlu perbaikan'].includes(normalized)) {
+    return 'border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400';
+  }
+  return 'border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300';
+}
+
 function createPendingBbcode(candidate, reasons, customReason, staffProfile) {
   const selectedReasons = [
     ...reasons.map((reasonId) => PENDING_REASON_OPTIONS.find((reason) => reason.id === reasonId)?.label).filter(Boolean),
@@ -170,6 +184,9 @@ export default function ReviewPage() {
   const [viewMode, setViewMode] = useState('NEW'); // 'NEW', 'PENDING', atau 'ACCEPTED'
   const [selectedId, setSelectedId] = useState('');
   const [selectedCandidateData, setSelectedCandidateData] = useState(null);
+  const [candidateHistory, setCandidateHistory] = useState(null);
+  const [candidateHistoryError, setCandidateHistoryError] = useState(null);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({ 
@@ -326,6 +343,30 @@ export default function ReviewPage() {
   const selectedCand = selectedCandidateData?.id === selectedId
     ? selectedCandidateData
     : candidates.find(c => c.id === selectedId);
+  useEffect(() => {
+    if (!selectedCand?.id) return undefined;
+    let active = true;
+    fetch(`/api/internal/candidate-history?candidate_id=${encodeURIComponent(selectedCand.id)}`, { cache: 'no-store' })
+      .then(async (response) => ({ response, data: await response.json() }))
+      .then(({ response, data }) => {
+        if (!active) return;
+        if (!response.ok || !data.success) throw new Error(data.error || 'Riwayat lamaran gagal dimuat.');
+        setCandidateHistory({ candidateId: selectedCand.id, items: data.history || [] });
+        setCandidateHistoryError(null);
+      })
+      .catch((error) => {
+        if (active) setCandidateHistoryError({ candidateId: selectedCand.id, message: error.message || 'Riwayat lamaran gagal dimuat.' });
+      });
+    return () => { active = false; };
+  }, [selectedCand?.id]);
+  useEffect(() => {
+    if (!historyModalOpen) return undefined;
+    const closeOnEscape = (event) => { if (event.key === 'Escape') setHistoryModalOpen(false); };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [historyModalOpen]);
+  const selectedHistory = selectedCand && candidateHistory?.candidateId === selectedCand.id ? candidateHistory.items : null;
+  const selectedHistoryError = selectedCand && candidateHistoryError?.candidateId === selectedCand.id ? candidateHistoryError.message : '';
   const selectedPendingReasons = selectedCand ? pendingReasonsByCandidate[selectedCand.id] || [] : [];
   const selectedCustomPendingReason = selectedCand ? customPendingReasonByCandidate[selectedCand.id] || '' : '';
   const interviewStartTime = Date.parse(selectedBatch?.interview_start || '');
@@ -544,7 +585,12 @@ export default function ReviewPage() {
               <div className="flex justify-between items-start border-b border-slate-100 pb-3">
                 <div>
                   <h2 className="text-lg font-bold text-slate-800">{selectedCand.nama}</h2>
-                  <p className="text-xs text-slate-500">Gender: {selectedCand.gender}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <p className="text-xs text-slate-500">Gender: {selectedCand.gender || 'Belum dicatat'}</p>
+                    <button type="button" onClick={() => setHistoryModalOpen(true)} className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60" aria-haspopup="dialog">
+                      {selectedHistory ? (selectedHistory.length ? `Pernah melamar di ${selectedHistory.length} batch` : 'Belum ada riwayat batch') : selectedHistoryError ? 'Riwayat tidak tersedia' : 'Memuat riwayat…'}
+                    </button>
+                  </div>
                 </div>
                 <a href={selectedCand.link_cv} target="_blank" rel="noreferrer" className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-700 transition">
                   Buka Thread CV ↗
@@ -713,6 +759,25 @@ export default function ReviewPage() {
             </form>
           )}
         </div>
+
+        {historyModalOpen && selectedCand && <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) setHistoryModalOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="candidate-history-title" className="my-auto max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+              <div><p className="font-sans text-xs font-bold uppercase tracking-wide text-[#1E3A2B] dark:text-emerald-400">Informasi kandidat</p><h2 id="candidate-history-title" className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">Riwayat lamaran · {selectedCand.nama}</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Riwayat dicocokkan berdasarkan nama atau tautan CV. Konfirmasikan identitas; informasi ini terpisah dari status blacklist.</p></div>
+              <button type="button" onClick={() => setHistoryModalOpen(false)} aria-label="Tutup riwayat lamaran" className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100">×</button>
+            </header>
+            <div className="max-h-[65vh] space-y-3 overflow-y-auto p-5">
+              {selectedHistoryError ? <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{selectedHistoryError}</div>
+                : selectedHistory === null ? <p role="status" className="py-8 text-center text-sm text-slate-500">Memuat riwayat lamaran…</p>
+                  : selectedHistory.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">Belum ditemukan lamaran kandidat ini di batch sebelumnya.</p>
+                    : selectedHistory.map((item) => <article key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+                      <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-bold text-slate-900 dark:text-slate-100">{item.batchName}</h3><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{item.createdAt ? `Melamar ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeZone: 'Asia/Jakarta' }).format(new Date(item.createdAt))}` : 'Tanggal lamaran tidak tersedia'}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${historyStatusBadgeClass(item.lastStatus)}`}>Terakhir: {item.lastStatus}</span></div>
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs"><span className={`rounded-lg px-2.5 py-1.5 ${historyStatusBadgeClass(item.statusCv)}`}>CV: {item.statusCv || 'Belum direview'}</span><span className={`rounded-lg px-2.5 py-1.5 ${historyStatusBadgeClass(item.statusInterview)}`}>Interview: {item.statusInterview || 'Belum masuk tahap'}</span>{item.deleted && <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">Data lamaran dihapus</span>}</div>
+                    </article>)}
+            </div>
+            <footer className="flex justify-end border-t border-slate-100 px-5 py-3 dark:border-slate-700"><button type="button" onClick={() => setHistoryModalOpen(false)} className="rounded-lg bg-[#1E3A2B] px-4 py-2 text-sm font-bold text-white hover:bg-[#294d39]">Tutup</button></footer>
+          </section>
+        </div>}
 
       </div>
 

@@ -3,6 +3,7 @@ import { Suspense, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import { getBatchStatus } from '@/lib/batch-status';
 import { BatchContext } from './BatchContext';
 
 const SELECTED_BATCH_STORAGE_KEY = 'rnt_selected_batch_id';
@@ -135,9 +136,10 @@ function DateTimeField({ value, onChange, label }) {
 }
 
 function batchStatus(batch, now) {
-  if (Date.parse(batch.registration_start) > now) return { label: 'Terjadwal', className: 'bg-sky-100 text-sky-800 ring-sky-200' };
-  if (now <= Date.parse(batch.registration_end)) return { label: 'Aktif', className: 'bg-emerald-100 text-emerald-800 ring-emerald-200' };
-  return { label: 'Selesai', className: 'bg-slate-100 text-slate-600 ring-slate-200' };
+  const status = getBatchStatus(batch, now);
+  if (status === 'scheduled') return { label: 'Terjadwal', className: 'bg-sky-100 text-sky-800 ring-sky-200' };
+  if (status === 'completed') return { label: 'Selesai', className: 'bg-slate-100 text-slate-600 ring-slate-200' };
+  return { label: 'Aktif', className: 'bg-emerald-100 text-emerald-800 ring-emerald-200' };
 }
 
 function InternalLayoutContent({ children }) {
@@ -774,7 +776,7 @@ function InternalLayoutContent({ children }) {
   }
 
   if (batchLoading || pathname === '/internal/select-batch' || !selectedBatch || showBatchPicker) {
-    const now = currentTime;
+    const now = serverClockNow ?? currentTime;
     return (
       <main className="batch-picker-page min-h-screen bg-[#f2f5f1] px-4 py-10 text-slate-800 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl">
