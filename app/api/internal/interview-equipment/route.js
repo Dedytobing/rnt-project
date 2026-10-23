@@ -57,7 +57,7 @@ export async function POST(request) {
   try {
     const db = createInternalDataClient(session);
     const access = await checkCandidateStageWindow(db, candidateId, 'academy');
-    if (!access.allowed) return json({ success: false, error: access.message }, access.status);
+    if (!access.allowed && !(item === 'KIT' && status === 'PENDING')) return json({ success: false, error: access.message }, access.status);
     if (session.role === 'STAFF') {
       const [{ data: candidate, error: candidateError }, { data: person, error: personError }] = await Promise.all([
         db.from('candidates').select('mapping_dept,status_interview,status_cv').eq('id', candidateId).eq('batch_id', batchId).is('deleted_at', null).maybeSingle(),

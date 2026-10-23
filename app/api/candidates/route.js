@@ -88,16 +88,15 @@ export async function GET(request) {
       status_interview: c.status_interview || ''
     }));
 
-    const { data: blacklist, error: blacklistError } = await supabase.from('candidate_blacklist').select('full_name,normalized_name,reason');
+    const { data: blacklist, error: blacklistError } = await supabase.from('candidate_blacklist').select('cid,status,reason');
     if (blacklistError) {
       console.error('Candidate blacklist query failed:', blacklistError);
       return NextResponse.json({ success: false, error: 'Status blacklist kandidat gagal dimuat.' }, { status: 503 });
     }
-    const blacklistByName = new Map((blacklist || []).map((item) => [item.normalized_name, item]));
+    const blacklistByCid = new Map((blacklist || []).filter((item) => item.cid).map((item) => [String(item.cid).trim().toUpperCase(), item]));
     const candidatesWithBlacklist = cleanData.map((candidate) => {
-      const normalizedName = String(candidate.nama || '').toLocaleLowerCase('id-ID').trim().replace(/\s+/g, ' ');
-      const match = blacklistByName.get(normalizedName);
-      return { ...candidate, blacklist_reason: match?.reason || '', is_blacklisted: Boolean(match) };
+      const match = candidate.cid ? blacklistByCid.get(String(candidate.cid).trim().toUpperCase()) : null;
+      return { ...candidate, cid_status: match?.status || '', cid_reason: match?.reason || '', blacklist_reason: match?.status === 'Blacklist' ? match.reason || '' : '', is_blacklisted: match?.status === 'Blacklist' };
     });
 
     return NextResponse.json({ success: true, data: candidatesWithBlacklist }, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -145,7 +144,7 @@ export async function POST(request) {
         return NextResponse.json({ success: false, error: 'Layanan pendaftaran belum dikonfigurasi.' }, { status: 503 });
       }
 
-      const { nama: candidateName, gender: candidateGender, linkCv: candidateCv, batchId } = body;
+      const { cid: candidateCid, nama: candidateName, gender: candidateGender, linkCv: candidateCv, batchId } = body;
       const registrationDb = internalSession ? createInternalDataClient(internalSession) : createServiceRoleClient();
       const { data: batch, error: batchError } = await registrationDb.from('recruitment_batches')
         .select('registration_start,registration_end').eq('id', batchId).is('deleted_at', null).maybeSingle();
@@ -156,6 +155,7 @@ export async function POST(request) {
         return NextResponse.json({ success: false, error: 'Pendaftaran batch ini sudah ditutup sesuai jadwal.' }, { status: 403 });
       }
       const { data: registration, error } = await registerCandidate({
+        cid: candidateCid,
         name: candidateName,
         gender: candidateGender,
         cvUrl: candidateCv,
@@ -168,7 +168,7 @@ export async function POST(request) {
         return NextResponse.json({ success: false, error: 'Data kandidat gagal disimpan. Coba lagi nanti.' }, { status: 500 });
       }
       if (registration?.status === 'duplicate') {
-        return NextResponse.json({ success: false, error: 'Nama atau Link CV sudah terdaftar!' }, { status: 400 });
+        return NextResponse.json({ success: false, error: 'CID, nama, atau Link CV sudah terdaftar dalam batch ini!' }, { status: 400 });
       }
 
       return NextResponse.json({ success: true, message: 'CV berhasil didaftarkan!' });
@@ -276,7 +276,7 @@ export async function POST(request) {
       if (session?.role !== 'ADMIN') {
         return NextResponse.json({ success: false, error: 'Hanya Team RED yang dapat mengubah keputusan akhir.' }, { status: 403 });
       }
-      const { id, nama, gender, linkCv, statusCv, mdtCheck, mappingDept, statusInterview, catatan, notesInvestigator, notesInterviewer, departmentOnly } = body;
+      const { id, nama, cid, gender, linkCv, statusCv, mdtCheck, mappingDept, statusInterview, catatan, notesInvestigator, notesInterviewer, departmentOnly } = body;
 
       if (mappingDept !== undefined && !['', 'LSSD', 'LSPD', 'DOC'].includes(mappingDept)) {
         return NextResponse.json({ success: false, error: 'Departemen final tidak valid.' }, { status: 400 });
@@ -314,6 +314,7 @@ export async function POST(request) {
 
       const updates = {
         nama,
+        ...(cid !== undefined ? { cid: cid ? cid.trim().toUpperCase() : null } : {}),
         ...(gender !== undefined ? { gender: gender || null } : {}),
         ...(linkCv ? { link_cv: linkCv } : {}),
         status_cv: statusCv || null,

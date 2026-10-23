@@ -25,7 +25,7 @@ function formatRegistrationDeadline(value) {
 }
 
 export default function CandidatePage() {
-  const [candForm, setCandForm] = useState({ nama: '', gender: '', linkCv: '' });
+  const [candForm, setCandForm] = useState({ cid: '', nama: '', gender: '', linkCv: '' });
   const [loading, setLoading] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [alert, setAlert] = useState({ show: false, msg: '', type: '' });
@@ -34,7 +34,7 @@ export default function CandidatePage() {
   const [showPortalBack, setShowPortalBack] = useState(false);
   const [portalReturnTo, setPortalReturnTo] = useState('/internal/dashboard');
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const hasUnsavedChanges = Boolean(candForm.nama || candForm.gender || candForm.linkCv);
+  const hasUnsavedChanges = Boolean(candForm.cid || candForm.nama || candForm.gender || candForm.linkCv);
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return undefined;
@@ -131,7 +131,7 @@ export default function CandidatePage() {
       if (data.success) {
         setCooldownSeconds(0);
         setAlert({ show: true, msg: data.message || 'Pendaftaran berhasil dikirim.', type: 'success' });
-        setCandForm({ nama: '', gender: '', linkCv: '' });
+        setCandForm({ cid: '', nama: '', gender: '', linkCv: '' });
       } else {
         if (response.status === 429) setCooldownSeconds(Math.max(1, Number(data.retryAfter) || Number(response.headers.get('Retry-After')) || 1));
         setAlert({ show: true, msg: data.error || 'Pendaftaran belum dapat dikirim.', type: 'error' });
@@ -157,8 +157,8 @@ export default function CandidatePage() {
           <h1>Form kandidat baru</h1>
           <p>Isi data diri dan tautan thread CV forum untuk memulai proses seleksi.</p>
           {activeBatch ? (
-            <div className="mt-6 flex flex-wrap items-center gap-2">
-              <p className="candidate-announcement rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800 whitespace-nowrap sm:text-sm">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <p className="candidate-announcement w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-center text-xs text-emerald-800 sm:text-sm">
                 Batas Pendaftaran <strong>{publicBatchName(activeBatch.name)}</strong>: {formatRegistrationDeadline(activeBatch.registration_end)}
               </p>
               {staffGraceActive && (
@@ -168,13 +168,25 @@ export default function CandidatePage() {
               )}
             </div>
           ) : (
-            <p className="candidate-announcement mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 whitespace-nowrap dark:border dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300 sm:text-sm">
+            <p className="candidate-announcement mt-3 w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-center text-xs font-medium text-amber-800 dark:border dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300 sm:text-sm">
               Pendaftaran belum dibuka. Kembali saat batch baru tersedia.
             </p>
           )}
         </div>
 
-        <form onSubmit={handleCandSubmit} className="candidate-form">
+        <form onSubmit={handleCandSubmit} className="candidate-form space-y-3.5">
+          <label htmlFor="candidate-cid">CID / Nomor Identitas <span>*</span></label>
+          <input
+            id="candidate-cid"
+            type="text"
+            required
+            maxLength={40}
+            autoComplete="off"
+            value={candForm.cid}
+            onChange={(event) => setCandForm({ ...candForm, cid: event.target.value.toUpperCase() })}
+            placeholder="Contoh: F8B84829"
+          />
+
           <label htmlFor="candidate-name">Nama lengkap <span>*</span></label>
           <input
             id="candidate-name"

@@ -286,7 +286,7 @@ export default function InterviewPage() {
           <input 
             type="text" 
             placeholder="Cari nama kandidat..." 
-            className="w-full border border-slate-300 p-2 rounded-lg text-xs text-slate-900 bg-white focus:outline-none focus:border-blue-500" 
+            className="w-full border border-slate-300 p-2 rounded-lg text-xs text-slate-900 bg-white placeholder-slate-500 focus:outline-none focus:border-blue-500 dark:bg-slate-900 dark:placeholder-slate-400 dark:text-slate-100"
             value={search} 
             onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
           />
@@ -300,21 +300,22 @@ export default function InterviewPage() {
                   key={c.id}
                   type="button"
                   onClick={() => handleSelect(c)}
-                  className={`w-full text-left p-3 rounded-xl border transition flex flex-col gap-1 ${
+                  className={`relative h-[76px] w-full shrink-0 overflow-hidden text-left p-3 rounded-xl border transition flex flex-col justify-between ${
                     c.id === selectedId 
                       ? 'bg-blue-50/80 border-blue-500 shadow-sm' 
                       : 'bg-slate-50/50 border-slate-200 hover:bg-slate-100/80'
                   }`}>
-                  <div className="flex justify-between items-center">
-                    <span className="flex min-w-0 items-center gap-2"><span className="font-bold text-xs text-slate-800 truncate">{c.nama}</span>{c.is_blacklisted && <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-extrabold text-rose-800">⚠️ BLACKLISTED</span>}</span>
-                    <span className={`interview-queue-status ${c.status_interview === 'Passed' ? 'passed' : c.status_interview === 'Failed' ? 'failed' : c.status_interview === 'Pending' ? 'pending' : 'ready'}`}>
+                  <span aria-hidden="true" className={`absolute bottom-0 left-0 top-0 z-10 w-1.5 rounded-l ${c.cid_status === 'Blacklist' ? 'bg-red-500' : c.cid_status === 'Yellowlist' ? 'bg-amber-500' : c.cid_status === 'Recommended' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                  <div className="flex min-h-5 w-full items-center justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-5 text-slate-800">{c.nama}</span>
+                    <span className={`interview-queue-status shrink-0 ${c.status_interview === 'Passed' ? 'passed' : c.status_interview === 'Failed' ? 'failed' : c.status_interview === 'Pending' ? 'pending' : 'ready'}`}>
                       {c.status_interview === 'Passed' ? 'Passed' : c.status_interview === 'Failed' ? 'Failed' : c.status_interview === 'Pending' ? 'Pending' : 'Belum interview'}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-[11px] text-slate-500">
-                    <span>{c.gender}</span>
+                  <div className="flex min-h-5 w-full items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="min-w-0 flex-1 truncate">{c.gender || 'Gender belum diisi'} · {c.cid || 'CID belum dicatat'}</span>
                     {c.mdt_check && (
-                      <span className={`font-semibold text-[10px] ${
+                      <span className={`shrink-0 font-semibold text-[10px] ${
                         c.mdt_check === 'Green' ? 'text-emerald-600' :
                         c.mdt_check === 'Yellow' ? 'text-amber-600' : 'text-rose-600'
                       }`}>
@@ -441,7 +442,7 @@ export default function InterviewPage() {
                 <label className="block text-xs font-bold text-slate-700 mb-1">Officer Assist (Opsional)</label>
                 <input 
                   type="text" 
-                  className="w-full border border-slate-300 p-2.5 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:border-blue-500" 
+                  className="w-full border border-slate-300 p-2.5 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:border-blue-500 dark:bg-slate-900 dark:placeholder-slate-400 dark:text-slate-100"
                   placeholder="Contoh: Lucas D Riverra" 
                   value={form.assistName} 
                   onChange={e => updateAcademyTemplateData({ assistName: e.target.value })}
@@ -483,7 +484,7 @@ export default function InterviewPage() {
                     <div className="academy-schedule-item"><span>Waktu · WIB</span><strong>{academySchedule.time}</strong></div>
                   </div>
                   <label className="academy-preview-label" htmlFor="interview-academy-bbcode">Pratinjau BBCode</label>
-                  <textarea ref={academyPreviewRef} id="interview-academy-bbcode" className="academy-bbcode-preview" rows="10" readOnly value={academyBbcode} />
+                  <textarea ref={academyPreviewRef} id="interview-academy-bbcode" className="academy-bbcode-preview dark:bg-slate-900 dark:placeholder-slate-400 dark:text-slate-100" rows="10" readOnly value={academyBbcode} />
                   <div className="academy-template-actions">
                     <span role="status" aria-live="polite">{academyMessage || (!academyStaffReady ? 'Memuat profil petugas yang login…' : academySchedule.available ? 'Kode tersusun otomatis dari kandidat, jadwal batch, dan profil petugas.' : 'Jadwal Academy batch ini belum tersedia.')}</span>
                     <button type="button" onClick={copyAcademyBbcode} disabled={!academySchedule.available || !academyPassed || !academyStaffReady}>
@@ -507,7 +508,7 @@ export default function InterviewPage() {
                   </select>
                   {declinedReason ? <>
                     <label className="academy-preview-label" htmlFor="interview-academy-bbcode">Pratinjau BBCode</label>
-                    <textarea ref={academyPreviewRef} id="interview-academy-bbcode" className="academy-bbcode-preview" rows="12" readOnly value={declinedBbcode} />
+                    <textarea ref={academyPreviewRef} id="interview-academy-bbcode" className="academy-bbcode-preview dark:bg-slate-900 dark:placeholder-slate-400 dark:text-slate-100" rows="12" readOnly value={declinedBbcode} />
                     <div className="academy-template-actions">
                       <span role="status" aria-live="polite">{academyMessage || 'Nama kandidat, alasan, dan signature petugas dimasukkan otomatis.'}</span>
                       <button type="button" onClick={copyAcademyBbcode} disabled={!academyStaffReady || !declinedBbcode}>
