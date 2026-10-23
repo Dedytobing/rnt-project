@@ -1243,3 +1243,11 @@ html[data-theme="dark"] .staff-login-card .staff-login-footer { color: #cbd5e1 !
 .candidate-page .candidate-field-hint,
 .candidate-page .candidate-required-note { font-size: 12px !important; }
 html[data-theme="dark"] .candidate-page .candidate-form label { color: #e2e8f0 !important; }
+
+.candidate-page .candidate-form > * + * { margin-top: 14px !important; }
+.candidate-page .candidate-form label { margin: 0 !important; color: #1e293b; font-size: 14px !important; font-weight: 600; }
+
+html[data-theme="dark"] .staff-content .review-page textarea,
+html[data-theme="dark"] .staff-content .interview-page textarea { color: #f1f5f9; background-color: #0f172a; border-color: #475569; }
+html[data-theme="dark"] .staff-content .review-page textarea::placeholder,
+html[data-theme="dark"] .staff-content .interview-page textarea::placeholder { color: #94a3b8; opacity: 1; }

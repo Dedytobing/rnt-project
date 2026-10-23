@@ -525,7 +525,7 @@ export default function ReviewPage() {
           <input 
             type="text" 
             placeholder="Cari nama..." 
-            className="w-full border border-slate-300 p-2 rounded-lg text-xs text-slate-900 bg-white focus:outline-none focus:border-emerald-700"
+            className="w-full border border-slate-300 p-2 rounded-lg text-xs text-slate-900 bg-white placeholder-slate-500 focus:outline-none focus:border-emerald-700 dark:bg-slate-900 dark:placeholder-slate-400 dark:text-slate-100"
             value={search} 
             onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
           />
@@ -539,24 +539,25 @@ export default function ReviewPage() {
                   key={c.id}
                   type="button"
                   onClick={() => handleSelect(c)}
-                  className={`w-full text-left p-3 rounded-xl border transition flex flex-col gap-1 ${
+                  className={`relative h-[76px] w-full shrink-0 overflow-hidden text-left p-3 rounded-xl border transition flex flex-col justify-between ${
                     c.id === selectedId ? 'bg-emerald-50/80 border-emerald-600 shadow-sm' : 'bg-slate-50/50 border-slate-200 hover:bg-slate-100/80'
                   }`}>
-                  <div className="flex justify-between items-center">
-                    <span className="flex min-w-0 items-center gap-2"><span className="font-bold text-xs text-slate-800 truncate">{c.nama}</span>{c.is_blacklisted && <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-extrabold text-rose-800">⚠️ BLACKLISTED</span>}</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      c.status_cv === 'Interview' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 
-                      c.status_cv === 'Pending' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 
-                      c.status_cv === 'Rejected' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
-                      'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  <span aria-hidden="true" className={`absolute bottom-0 left-0 top-0 z-10 w-1.5 rounded-l ${c.cid_status === 'Blacklist' ? 'bg-red-500' : c.cid_status === 'Yellowlist' ? 'bg-amber-500' : c.cid_status === 'Recommended' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                  <div className="flex min-h-5 w-full items-center justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-5 text-slate-800">{c.nama}</span>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                      c.status_cv === 'Interview' || c.status_cv === 'Accepted' ? 'border-emerald-300 bg-emerald-100 text-emerald-800' :
+                      c.status_cv === 'Pending' ? 'border-amber-300 bg-amber-100 text-amber-800' :
+                      c.status_cv === 'Rejected' ? 'border-rose-300 bg-rose-100 text-rose-800' :
+                      'border-slate-300 bg-slate-100 text-slate-700'
                     }`}>
-                      {c.status_cv === 'Rejected' ? 'CV Ditolak' : c.status_cv || 'Baru'}
+                      {c.status_cv === 'Rejected' ? 'CV Ditolak' : c.status_cv === 'Pending' ? 'Pending' : ['Interview', 'Accepted'].includes(c.status_cv) ? 'CV Diterima' : 'Baru'}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-[11px] text-slate-500">
-                    <span>{c.gender}</span>
+                  <div className="flex min-h-5 w-full items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="min-w-0 flex-1 truncate">{c.gender || 'Gender belum diisi'} · {c.cid || 'CID belum dicatat'}</span>
                     {c.mdt_check && (
-                      <span className={`font-semibold text-[10px] ${
+                      <span className={`shrink-0 font-semibold text-[10px] ${
                         c.mdt_check === 'Green' ? 'text-emerald-600' :
                         c.mdt_check === 'Yellow' ? 'text-amber-600' : 'text-rose-600'
                       }`}>
@@ -582,11 +583,12 @@ export default function ReviewPage() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {selectedCand.is_blacklisted && <div role="alert" className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900"><strong>⚠️ Kandidat masuk daftar blacklist.</strong><p className="mt-1 whitespace-pre-wrap">{selectedCand.blacklist_reason}</p></div>}
+              {['Recommended', 'Yellowlist'].includes(selectedCand.cid_status) && <div role="status" className={`rounded-xl border px-4 py-3 text-sm ${selectedCand.cid_status === 'Yellowlist' ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-emerald-300 bg-emerald-50 text-emerald-900'}`}><strong>{selectedCand.cid_status === 'Yellowlist' ? '🟡 Kandidat berstatus On Hold.' : '🟢 Kandidat berstatus Recommended.'}</strong><p className="mt-1 whitespace-pre-wrap">{selectedCand.cid_reason || 'Tidak ada catatan alasan.'}</p></div>}
               <div className="flex justify-between items-start border-b border-slate-100 pb-3">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-800">{selectedCand.nama}</h2>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{selectedCand.nama}</h2>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <p className="text-xs text-slate-500">Gender: {selectedCand.gender || 'Belum dicatat'}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Gender: {selectedCand.gender || 'Belum dicatat'} · CID: {selectedCand.cid || 'Belum dicatat'}</p>
                     <button type="button" onClick={() => setHistoryModalOpen(true)} className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60" aria-haspopup="dialog">
                       {selectedHistory ? (selectedHistory.length ? `Pernah melamar di ${selectedHistory.length} batch` : 'Belum ada riwayat batch') : selectedHistoryError ? 'Riwayat tidak tersedia' : 'Memuat riwayat…'}
                     </button>
@@ -650,7 +652,7 @@ export default function ReviewPage() {
                 </label>
                 <textarea 
                   rows="2" 
-                  className={`w-full border p-2.5 rounded-lg text-sm text-slate-900 bg-white focus:outline-none ${
+                  className={`w-full border p-2.5 rounded-lg text-sm text-slate-900 bg-white focus:outline-none dark:bg-slate-900 dark:placeholder-slate-400 dark:text-slate-100 ${
                     isCvNoteRequired && !form.catatan.trim() ? 'border-rose-300 bg-rose-50/30' : 'border-slate-300'
                   }`}
                   value={form.catatan} 
@@ -662,7 +664,7 @@ export default function ReviewPage() {
                 <label className="block text-xs font-bold text-slate-700 mb-1">Saran / Feedback</label>
                 <textarea 
                   rows="2" 
-                    className="w-full border border-slate-300 p-2.5 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:border-emerald-700"
+                    className="w-full border border-slate-300 p-2.5 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:border-emerald-700 dark:bg-slate-900 dark:placeholder-slate-400 dark:text-slate-100"
                   value={form.saran} 
                   onChange={e => setForm({...form, saran: e.target.value})} 
                   placeholder="Saran untuk kandidat/interviewer..."></textarea>
@@ -674,7 +676,7 @@ export default function ReviewPage() {
                 </label>
                 <textarea 
                   rows="2" 
-                  className={`w-full border p-2.5 rounded-lg text-sm text-slate-900 bg-white focus:outline-none ${
+                  className={`w-full border p-2.5 rounded-lg text-sm text-slate-900 bg-white focus:outline-none dark:bg-slate-900 dark:placeholder-slate-400 dark:text-slate-100 ${
                     isMdtNoteRequired && !form.notesInvestigator.trim() ? 'border-rose-300 bg-rose-50/30' : 'border-slate-300'
                   }`}
                   value={form.notesInvestigator} 
@@ -730,6 +732,7 @@ export default function ReviewPage() {
                   <textarea
                     id="pending-custom-reason"
                     rows="2"
+                    className="dark:bg-slate-900 dark:placeholder-slate-400 dark:text-slate-100"
                     value={selectedCustomPendingReason}
                     onChange={(event) => {
                       if (!selectedCand) return;
@@ -748,7 +751,7 @@ export default function ReviewPage() {
                 </div>}
 
                 <label className="pending-bbcode-label" htmlFor="review-bbcode-preview">Pratinjau BBCode</label>
-                <textarea ref={reviewPreviewRef} id="review-bbcode-preview" className="pending-bbcode-preview" rows="12" readOnly value={reviewBbcode} />
+                <textarea ref={reviewPreviewRef} id="review-bbcode-preview" className="pending-bbcode-preview dark:bg-slate-900 dark:placeholder-slate-400 dark:text-slate-100" rows="12" readOnly value={reviewBbcode} />
                 <div className="pending-template-actions">
                   <span role="status" aria-live="polite">{copyMessage || (!form.statusCv ? 'Pilih status CV untuk menampilkan template.' : form.statusCv === 'Pending' ? (hasPendingReasons ? 'Nama kandidat dan staff dimasukkan otomatis.' : 'Pilih minimal satu alasan sebelum menyalin.') : form.statusCv === 'Rejected' ? (interviewScheduleStarted && !selectedRejectedReason ? 'Pilih alasan penolakan untuk membuat template Declined.' : 'Nama kandidat, alasan, dan signature petugas dimasukkan otomatis.') : (interviewSchedule.available ? 'Nama kandidat, jadwal, dan signature petugas dimasukkan otomatis.' : 'Jadwal wawancara batch aktif belum dikonfigurasi.'))}</span>
                   <button type="button" onClick={() => copyReviewBbcode(reviewPreviewRef)} disabled={!reviewBbcode || (form.statusCv === 'Pending' && !hasPendingReasons) || (form.statusCv === 'Interview' && !interviewSchedule.available)}>

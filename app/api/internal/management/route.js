@@ -14,7 +14,7 @@ const departmentAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('SET_CANDIDATE_DEPARTMENTS_FROM_PREFERENCE'), candidateIds: z.array(z.string().min(1).max(100)).min(1).max(500), batchId: z.uuid() }).strict(),
 ]);
 const personnelAction = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('SAVE_BLACKLIST'), blacklistId: z.uuid().nullable().optional(), fullName: z.string().trim().min(2).max(120), reason: z.string().trim().min(2).max(2000) }).strict(),
+  z.object({ action: z.literal('SAVE_BLACKLIST'), blacklistId: z.uuid().nullable().optional(), cid: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9]+$/).transform((value) => value.toUpperCase()), status: z.enum(['Recommended', 'Yellowlist', 'Blacklist']), reason: z.string().trim().min(2).max(2000) }).strict(),
   z.object({ action: z.literal('DELETE_BLACKLIST'), blacklistId: z.uuid() }).strict(),
   z.object({ action: z.literal('SAVE_PERSONNEL'), personnelId: z.uuid(), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']), rank: z.string().trim().min(2).max(60), position: z.string().trim().max(100), department: z.enum(['LSPD', 'LSSD', 'SASP']) }).strict(),
   z.object({ action: z.literal('DELETE_PERSONNEL'), personnelId: z.uuid() }).strict(),
@@ -52,8 +52,8 @@ export async function GET(request) {
     const [personnel, whitelist, candidates, blacklist] = await Promise.all([
       db.from('rnt_personnel').select('id,full_name,normalized_name,role,rank,position,department,is_active').order('full_name'),
       db.from('rnt_personnel_name_whitelist').select('id,full_name,normalized_name,role,is_active,created_at').order('full_name'),
-      db.from('candidates').select('id,nama,gender,link_cv,batch_id,deleted_at,deleted_by,status_cv,status_interview,mdt_check,catatan,notes_investigator,notes_interviewer,created_at,mapping_dept,dept_preference').eq('batch_id', batchId.data).order('created_at', { ascending: false }),
-      db.from('candidate_blacklist').select('id,full_name,normalized_name,reason,created_at,updated_at').order('full_name'),
+      db.from('candidates').select('id,nama,cid,gender,link_cv,batch_id,deleted_at,deleted_by,status_cv,status_interview,mdt_check,catatan,notes_investigator,notes_interviewer,created_at,mapping_dept,dept_preference').eq('batch_id', batchId.data).order('created_at', { ascending: false }),
+      db.from('candidate_blacklist').select('id,cid,status,reason,created_at,updated_at').order('cid'),
     ]);
     const failed = [personnel, whitelist, candidates, blacklist].find((result) => result.error);
     if (failed) throw failed.error;
@@ -88,11 +88,9 @@ export async function POST(request) {
   const db = createInternalDataClient(session);
   try {
     if (action.action === 'SAVE_BLACKLIST') {
-      const fullName = action.fullName.trim();
-      const normalizedName = fullName.toLocaleLowerCase('id-ID').replace(/\s+/g, ' ');
       let query = action.blacklistId
-        ? db.from('candidate_blacklist').update({ full_name: fullName, normalized_name: normalizedName, reason: action.reason.trim(), updated_at: new Date().toISOString() }).eq('id', action.blacklistId)
-        : db.from('candidate_blacklist').insert({ full_name: fullName, normalized_name: normalizedName, reason: action.reason.trim() });
+        ? db.from('candidate_blacklist').update({ cid: action.cid, status: action.status, reason: action.reason.trim(), updated_at: new Date().toISOString() }).eq('id', action.blacklistId)
+        : db.from('candidate_blacklist').insert({ cid: action.cid, status: action.status, reason: action.reason.trim() });
       const { data, error } = await query.select('id').single();
       if (error) throw error;
       return NextResponse.json({ success: true, blacklistId: data.id });

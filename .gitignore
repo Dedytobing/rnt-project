@@ -33,6 +33,9 @@
 !/supabase/migrations/20261023010000_academy_department_group.sql
 !/supabase/migrations/20261023020000_academy_department_attendance.sql
 !/supabase/migrations/20261023030000_combined_academy_equipment.sql
+!/supabase/migrations/20261029000000_candidate_cid.sql
+!/supabase/migrations/20261030000000_candidate_cid_status.sql
+!/supabase/migrations/20261031000000_academy_excuse_reason.sql
 # debug
 npm-debug.log*
 yarn-debug.log*
