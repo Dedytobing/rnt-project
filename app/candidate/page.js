@@ -133,10 +133,19 @@ export default function CandidatePage() {
         setAlert({ show: true, msg: data.message || 'Pendaftaran berhasil dikirim.', type: 'success' });
         setCandForm({ cid: '', nama: '', gender: '', linkCv: '' });
       } else {
+        console.error('Registration Error:', { status: response.status, error: data.error });
         if (response.status === 429) setCooldownSeconds(Math.max(1, Number(data.retryAfter) || Number(response.headers.get('Retry-After')) || 1));
-        setAlert({ show: true, msg: data.error || 'Pendaftaran belum dapat dikirim.', type: 'error' });
+        const isServerError = response.status >= 500;
+        setAlert({
+          show: true,
+          msg: isServerError
+            ? 'Pendaftaran gagal dikirim. Silakan coba beberapa saat lagi.'
+            : data.error || 'Pendaftaran belum dapat dikirim.',
+          type: 'error',
+        });
       }
-    } catch {
+    } catch (error) {
+      console.error('Registration Error:', error);
       setAlert({ show: true, msg: 'Tidak dapat terhubung ke server. Coba lagi sebentar.', type: 'error' });
     } finally {
       setLoading(false);
@@ -182,6 +191,7 @@ export default function CandidatePage() {
             required
             maxLength={40}
             autoComplete="off"
+            autoCapitalize="characters"
             value={candForm.cid}
             onChange={(event) => setCandForm({ ...candForm, cid: event.target.value.toUpperCase() })}
             placeholder="Contoh: F8B84829"

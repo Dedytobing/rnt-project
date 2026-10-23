@@ -12,6 +12,25 @@ function isMissingPreferenceColumn(error) {
     String(error?.message || '').includes('dept_preference');
 }
 
+function logCandidateApiError(stage, error, context = {}) {
+  let supabaseHost = 'unknown';
+  try { supabaseHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).host; } catch { /* Do not log credentials or full URLs. */ }
+
+  console.error(`[Candidates API] ${stage}`, {
+    ...context,
+    supabaseHost,
+    hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    error: {
+      name: error?.name,
+      code: error?.code,
+      message: error?.message || String(error),
+      details: error?.details,
+      hint: error?.hint,
+      stack: error?.stack,
+    },
+  });
+}
+
 // GET: Ambil Data Kandidat / Log Spesifik Kandidat
 export async function GET(request) {
   try {
@@ -148,7 +167,10 @@ export async function POST(request) {
       const registrationDb = internalSession ? createInternalDataClient(internalSession) : createServiceRoleClient();
       const { data: batch, error: batchError } = await registrationDb.from('recruitment_batches')
         .select('registration_start,registration_end').eq('id', batchId).is('deleted_at', null).maybeSingle();
-      if (batchError) return NextResponse.json({ success: false, error: 'Jadwal pendaftaran gagal diverifikasi.' }, { status: 503 });
+      if (batchError) {
+        logCandidateApiError('Registration batch lookup failed', batchError, { batchId });
+        return NextResponse.json({ success: false, error: 'Jadwal pendaftaran gagal diverifikasi.' }, { status: 503 });
+      }
       if (!batch) return NextResponse.json({ success: false, error: 'Batch pendaftaran tidak ditemukan.' }, { status: 404 });
       const gracePeriodMs = internalSession ? STAGE_GRACE_PERIOD_MS : 0;
       if (!isStageWindowOpen(batch.registration_start, batch.registration_end, Date.now(), gracePeriodMs)) {
@@ -164,8 +186,18 @@ export async function POST(request) {
       });
 
       if (error) {
-        console.error('Candidate registration insert failed:', error);
-        return NextResponse.json({ success: false, error: 'Data kandidat gagal disimpan. Coba lagi nanti.' }, { status: 500 });
+        logCandidateApiError('Candidate registration RPC failed', error, {
+          batchId,
+          rpc: 'register_candidate',
+          argumentNames: ['p_name', 'p_gender', 'p_cv_url', 'p_batch_id', 'p_is_internal', 'p_cid'],
+        });
+        const isDuplicate = error.code === '23505';
+        return NextResponse.json({
+          success: false,
+          error: isDuplicate
+            ? 'CID, nama, atau Link CV sudah terdaftar dalam batch ini!'
+            : 'Pendaftaran gagal dikirim. Silakan coba beberapa saat lagi.',
+        }, { status: isDuplicate ? 400 : 500 });
       }
       if (registration?.status === 'duplicate') {
         return NextResponse.json({ success: false, error: 'CID, nama, atau Link CV sudah terdaftar dalam batch ini!' }, { status: 400 });
@@ -336,7 +368,7 @@ export async function POST(request) {
 
     return NextResponse.json({ success: false, error: 'Aksi tidak valid.' }, { status: 400 });
   } catch (err) {
-    console.error('Candidates API request failed:', err);
+    logCandidateApiError('Unhandled POST request exception', err);
     return NextResponse.json({ success: false, error: 'Permintaan belum dapat diproses.' }, { status: 500 });
   }
 }

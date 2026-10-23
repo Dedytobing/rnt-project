@@ -36,6 +36,7 @@
 !/supabase/migrations/20261029000000_candidate_cid.sql
 !/supabase/migrations/20261030000000_candidate_cid_status.sql
 !/supabase/migrations/20261031000000_academy_excuse_reason.sql
+!/supabase/migrations/20261031010000_make_cid_registration_rpc_self_contained.sql
 # debug
 npm-debug.log*
 yarn-debug.log*
