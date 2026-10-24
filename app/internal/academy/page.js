@@ -1,10 +1,8 @@
 'use client';
 
-import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BatchContext } from '../BatchContext';
 import { isStageWindowOpen } from '@/lib/stage-access';
-
-const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 function formatTime(value) {
   if (!value) return '—';
@@ -34,6 +32,23 @@ function isEquipmentIssued(status) {
   return status?.key_status === 'ISSUED' || status?.badge_status === 'ISSUED';
 }
 
+const AttendanceRowItem = memo(function AttendanceRowItem({ candidate, department, attendance, selected, busy, editable, academyOpen, onToggle, onStatusChange }) {
+  const key = String(candidate.id);
+  const status = attendance?.attendance_status || 'PENDING';
+  const statusText = status === 'EXCUSED' && attendance?.excuse_reason ? 'Izin (' + attendance.excuse_reason + ')' : statusLabel(status);
+  const statusOptions = [['PRESENT', 'Hadir'], ['ABSENT', 'T.Hadir'], ['EXCUSED', 'Izin']];
+  return <tr className="h-14 hover:bg-slate-50/70">
+    <td className="h-14 px-4 py-2"><input type="checkbox" aria-label={'Pilih ' + candidate.nama} checked={selected} onChange={() => onToggle(key)} className="h-4 w-4 accent-[#1E3A2B]" /></td>
+    <td className="h-14 px-3 py-2"><div className="truncate font-semibold text-slate-800">{candidate.nama}</div><div className="truncate text-xs text-slate-500">CID: {candidate.cid || 'Belum dicatat'}</div></td>
+    <td className="h-14 truncate px-3 py-2 text-xs text-slate-600">{department}</td>
+    <td className="h-14 px-3 py-2"><span className={'inline-flex max-w-[280px] truncate rounded-full px-2 py-1 text-[11px] font-semibold ring-1 ring-inset ' + statusStyle(status)} title={statusText}>{statusText}</span></td>
+    <td className="h-14 whitespace-nowrap px-3 py-2"><div className="inline-flex rounded-lg bg-slate-100 p-0.5" role="group" aria-label={'Status absensi ' + candidate.nama}>{statusOptions.map(([value, label]) => {
+      const selectedTone = value === 'PRESENT' ? 'bg-emerald-600 text-white' : value === 'ABSENT' ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white';
+      return <button key={value} type="button" aria-pressed={status === value} title={status === value ? 'Klik kembali untuk membatalkan status' : undefined} disabled={!editable || busy || (!academyOpen && value !== 'EXCUSED' && status !== value)} onClick={() => onStatusChange(candidate, value)} className={'rounded-md px-2 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ' + (status === value ? selectedTone + ' shadow-sm' : 'text-slate-600 hover:bg-white')}>{label}</button>;
+    })}</div></td>
+  </tr>;
+});
+
 export default function AcademyAttendancePage() {
   const { selectedBatch } = useContext(BatchContext);
   const selectedBatchId = selectedBatch?.id;
@@ -41,6 +56,7 @@ export default function AcademyAttendancePage() {
   const [equipment, setEquipment] = useState({ statuses: [] });
   const [activeTab, setActiveTab] = useState('attendance');
   const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState('');
@@ -50,8 +66,13 @@ export default function AcademyAttendancePage() {
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const refreshInFlight = useRef(false);
-  const sortableListRef = useRef(null);
-  const previousSortableRowTops = useRef(new Map());
+  const pendingAttendance = useRef(new Map());
+  const [pendingAttendanceIds, setPendingAttendanceIds] = useState(() => new Set());
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(''), 4500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const refresh = useCallback(async () => {
     if (!selectedBatchId) return;
@@ -85,29 +106,6 @@ export default function AcademyAttendancePage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  useIsomorphicLayoutEffect(() => {
-    const container = sortableListRef.current;
-    if (!container) {
-      previousSortableRowTops.current = new Map();
-      return;
-    }
-    const nextPositions = new Map();
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    for (const row of container.querySelectorAll('[data-sort-row]')) {
-      const key = row.getAttribute('data-sort-row');
-      const top = row.getBoundingClientRect().top;
-      const previousTop = previousSortableRowTops.current.get(key);
-      if (!reduceMotion && previousTop !== undefined && Math.abs(previousTop - top) > 1) {
-        row.animate(
-          [{ transform: 'translateY(' + (previousTop - top) + 'px)' }, { transform: 'translateY(0)' }],
-          { duration: 260, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
-        );
-      }
-      nextPositions.set(key, top);
-    }
-    previousSortableRowTops.current = nextPositions;
-  }, [activeTab, data.attendance, equipment.statuses]);
-
   useEffect(() => {
     queueMicrotask(() => { void refresh(); });
     const source = selectedBatchId ? new EventSource(`/api/internal/academy/stream?batch_id=${encodeURIComponent(selectedBatchId)}`) : null;
@@ -127,13 +125,14 @@ export default function AcademyAttendancePage() {
 
   const attendanceByCandidate = useMemo(() => new Map(data.attendance.map((row) => [String(row.candidate_id), row])), [data.attendance]);
   const equipmentByCandidate = useMemo(() => new Map(equipment.statuses.map((row) => [String(row.candidate_id), row])), [equipment.statuses]);
-  const setStatus = async (candidateId, status, excuseReason = '') => {
+  const setStatus = useCallback(async (candidateId, status, excuseReason = '') => {
     const key = String(candidateId);
-    if (savingId) return;
-    const previous = data.attendance.find((row) => String(row.candidate_id) === key);
+    const previous = pendingAttendance.current.get(key)?.previous ?? attendanceByCandidate.get(key) ?? null;
+    const requestId = Symbol(key);
+    pendingAttendance.current.set(key, { requestId, previous });
     setError('');
     setMessage('');
-    setSavingId(key);
+    setPendingAttendanceIds((current) => new Set(current).add(key));
     setData((current) => ({ ...current, attendance: previous
       ? current.attendance.map((row) => String(row.candidate_id) === key ? { ...row, attendance_status: status, excuse_reason: status === 'EXCUSED' ? excuseReason : null, updated_by: 'Menyimpan…', updated_at: new Date().toISOString() } : row)
       : [...current.attendance, { candidate_id: key, batch_id: selectedBatch.id, attendance_status: status, excuse_reason: status === 'EXCUSED' ? excuseReason : null, updated_by: 'Menyimpan…', updated_at: new Date().toISOString() }] }));
@@ -145,16 +144,38 @@ export default function AcademyAttendancePage() {
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Absensi gagal disimpan.');
-      setMessage(`Status ${statusLabel(status).toLowerCase()} berhasil diperbarui.`);
-      await refresh();
+      if (pendingAttendance.current.get(key)?.requestId === requestId) {
+        setMessage(`Status ${statusLabel(status).toLowerCase()} berhasil diperbarui.`);
+        pendingAttendance.current.delete(key);
+        setPendingAttendanceIds((current) => { const next = new Set(current); next.delete(key); return next; });
+        void refresh();
+      }
     } catch (issue) {
-      setError(issue.message || 'Absensi gagal disimpan.');
-      if (previous) setData((current) => ({ ...current, attendance: current.attendance.map((row) => String(row.candidate_id) === key ? previous : row) }));
-      else refresh();
-    } finally {
-      setSavingId('');
+      if (pendingAttendance.current.get(key)?.requestId === requestId) {
+        setError(issue.message || 'Absensi gagal disimpan.');
+        setToast(issue.message || 'Absensi gagal disimpan.');
+        setData((current) => ({ ...current, attendance: previous
+          ? current.attendance.map((row) => String(row.candidate_id) === key ? previous : row)
+          : current.attendance.filter((row) => String(row.candidate_id) !== key) }));
+        pendingAttendance.current.delete(key);
+        setPendingAttendanceIds((current) => { const next = new Set(current); next.delete(key); return next; });
+      }
     }
-  };
+  }, [attendanceByCandidate, refresh, selectedBatch]);
+
+  const handleAttendanceRowStatus = useCallback((candidate, status) => {
+    const candidateId = String(candidate.id);
+    const currentStatus = attendanceByCandidate.get(candidateId)?.attendance_status || 'PENDING';
+    if (currentStatus === status) {
+      setStatus(candidateId, 'PENDING');
+      return;
+    }
+    if (status === 'EXCUSED') {
+      setExcuseDialog({ rows: [{ candidate }], bulk: false, reason: '' });
+      return;
+    }
+    setStatus(candidateId, status);
+  }, [attendanceByCandidate, setStatus]);
 
   const requestAttendanceStatus = (rows, status, bulk = false) => {
     if (!bulk && rows.length === 1) {
@@ -190,7 +211,7 @@ export default function AcademyAttendancePage() {
     finally { setSavingId(''); }
   };
 
-  const toggleAttendanceSelection = (candidateId) => {
+  const toggleAttendanceSelection = useCallback((candidateId) => {
     const key = String(candidateId);
     setSelectedAttendanceIds((current) => {
       const next = new Set(current);
@@ -198,7 +219,7 @@ export default function AcademyAttendancePage() {
       else next.add(key);
       return next;
     });
-  };
+  }, []);
 
   const toggleDepartmentAttendanceSelection = (rows, selected) => {
     setSelectedAttendanceIds((current) => {
@@ -290,6 +311,7 @@ export default function AcademyAttendancePage() {
   const activeDepartmentCount = departments.filter(([department]) => department !== 'Belum ditentukan').length;
 
   return <div className="space-y-5">
+    {toast && <div role="alert" className="fixed right-4 top-4 z-[60] max-w-sm rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800 shadow-lg">{toast}</div>}
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#1E3A2B]">Academy · {selectedBatch?.name || 'Batch belum dipilih'}</p><h2 className="mt-1 text-2xl font-bold text-slate-900">Absensi Kandidat</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Absensi dan pembagian perlengkapan dikelompokkan menurut departemen. Perubahan tersinkron untuk personel lain di batch ini.</p></div><div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold ${realtimeConnected ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}><span className={`h-2.5 w-2.5 rounded-full ${realtimeConnected ? 'animate-pulse bg-emerald-600' : 'bg-amber-500'}`}/>{realtimeConnected ? 'LIVE · tersambung' : 'Sinkronisasi otomatis'}</div></div>
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Kandidat</small><strong className="mt-1 block text-xl text-slate-900">{data.candidates.length}</strong></div><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Departemen aktif</small><strong className="mt-1 block text-xl text-slate-900">{activeDepartmentCount}</strong></div><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Hadir</small><strong className="mt-1 block text-xl text-emerald-700">{presentCount}</strong></div><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Terakhir sinkron</small><strong className="mt-1 block text-sm text-slate-800">{lastSyncedAt ? formatTime(lastSyncedAt) : 'Memuat…'}</strong></div></div>
@@ -302,17 +324,13 @@ export default function AcademyAttendancePage() {
         <button type="button" role="tab" aria-selected={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')} className={`rounded-lg px-4 py-3 text-sm font-bold transition ${activeTab === 'attendance' ? 'bg-white text-[#1E3A2B] shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Absensi</button>
         <button type="button" role="tab" aria-selected={activeTab === 'equipment'} onClick={() => setActiveTab('equipment')} className={`rounded-lg px-4 py-3 text-sm font-bold transition ${activeTab === 'equipment' ? 'bg-white text-[#1E3A2B] shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Pemberian Lencana</button>
       </div>
-      {loading ? null : !candidateRows.length ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">Belum ada kandidat pada batch ini.</div> : activeTab === 'attendance' ? <div ref={sortableListRef} className="space-y-4">
+      {loading ? null : !candidateRows.length ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">Belum ada kandidat pada batch ini.</div> : activeTab === 'attendance' ? <div className="space-y-4">
         {departments.map(([department, rows]) => {
           const editable = data.role === 'ADMIN' || department === data.department;
           const countPresent = rows.filter(({ attendance }) => attendance?.attendance_status === 'PRESENT').length;
           const selectedCount = rows.filter(({ candidate }) => selectedAttendanceIds.has(String(candidate.id))).length;
           const allSelected = selectedCount === rows.length;
-          const sortedRows = [...rows].sort((left, right) => {
-            const leftRecorded = left.attendance?.attendance_status && left.attendance.attendance_status !== 'PENDING' ? 1 : 0;
-            const rightRecorded = right.attendance?.attendance_status && right.attendance.attendance_status !== 'PENDING' ? 1 : 0;
-            return leftRecorded - rightRecorded || String(left.candidate.nama || '').localeCompare(String(right.candidate.nama || ''), 'id-ID', { sensitivity: 'base' });
-          });
+          const sortedRows = [...rows].sort((left, right) => String(left.candidate.nama || '').localeCompare(String(right.candidate.nama || ''), 'id-ID', { sensitivity: 'base' }));
           const statusOptions = [['PRESENT', 'Hadir'], ['ABSENT', 'T.Hadir'], ['EXCUSED', 'Izin']];
           return <section key={department} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
@@ -326,24 +344,13 @@ export default function AcademyAttendancePage() {
               <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500"><tr><th className="w-10 px-4 py-2.5" aria-label="Pilih"/><th className="px-3 py-2.5">Kandidat</th><th className="px-3 py-2.5">Departemen</th><th className="px-3 py-2.5">Status absensi</th><th className="px-3 py-2.5">Aksi cepat</th></tr></thead>
               <tbody className="divide-y divide-slate-100">{sortedRows.map(({ candidate, attendance }) => {
                 const key = String(candidate.id);
-                const status = attendance?.attendance_status || 'PENDING';
-                const statusText = status === 'EXCUSED' && attendance?.excuse_reason ? 'Izin (' + attendance.excuse_reason + ')' : statusLabel(status);
-                const busy = savingId === key || Boolean(savingId && savingId.startsWith('bulk-'));
-                return <tr key={key} data-sort-row={'attendance-' + key} className="hover:bg-slate-50/70">
-                  <td className="px-4 py-2.5"><input type="checkbox" aria-label={'Pilih ' + candidate.nama} checked={selectedAttendanceIds.has(key)} onChange={() => toggleAttendanceSelection(key)} className="h-4 w-4 accent-[#1E3A2B]" /></td>
-                  <td className="px-3 py-2.5"><div className="font-semibold text-slate-800">{candidate.nama}</div><div className="text-xs text-slate-500">CID: {candidate.cid || 'Belum dicatat'}</div></td>
-                  <td className="px-3 py-2.5 text-xs text-slate-600">{department}</td>
-                  <td className="px-3 py-2.5"><span className={'inline-flex max-w-[280px] truncate rounded-full px-2 py-1 text-[11px] font-semibold ring-1 ring-inset ' + statusStyle(status)} title={statusText}>{statusText}</span></td>
-                  <td className="px-3 py-2.5"><div className="inline-flex rounded-lg bg-slate-100 p-0.5" role="group" aria-label={'Status absensi ' + candidate.nama}>{statusOptions.map(([value, label]) => {
-                    const selectedTone = value === 'PRESENT' ? 'bg-emerald-600 text-white' : value === 'ABSENT' ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white';
-                    return <button key={value} type="button" aria-pressed={status === value} title={status === value ? 'Klik kembali untuk membatalkan status' : undefined} disabled={!editable || busy || (!academyOpen && value !== 'EXCUSED' && status !== value)} onClick={() => requestAttendanceStatus([{ candidate }], value)} className={'rounded-md px-2 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ' + (status === value ? selectedTone + ' shadow-sm' : 'text-slate-600 hover:bg-white')}>{label}</button>;
-                  })}</div></td>
-                </tr>;
+                const busy = pendingAttendanceIds.has(key) || savingId === 'bulk-attendance';
+                return <AttendanceRowItem key={key} candidate={candidate} department={department} attendance={attendance} selected={selectedAttendanceIds.has(key)} busy={busy} editable={editable} academyOpen={academyOpen} onToggle={toggleAttendanceSelection} onStatusChange={handleAttendanceRowStatus} />;
               })}</tbody>
             </table></div>
           </section>;
         })}
-      </div> : <div ref={sortableListRef} className="space-y-4">
+      </div> : <div className="space-y-4">
         <p className="text-sm text-slate-600">Catat status penyerahan dan pengembalian. Setiap perubahan tersimpan pada log personel dan waktu.</p>
         {departments.map(([department, rows]) => {
           const editable = data.role === 'ADMIN' || department === data.department;
@@ -352,18 +359,14 @@ export default function AcademyAttendancePage() {
             return status?.key_status === 'ISSUED' && status?.badge_status === 'ISSUED';
           }).length;
           const allBadgesIssued = badgeSelectedCount === rows.length;
-          const sortedRows = [...rows].sort((left, right) => {
-            const leftIssued = isEquipmentIssued(equipmentByCandidate.get(String(left.candidate.id))) ? 1 : 0;
-            const rightIssued = isEquipmentIssued(equipmentByCandidate.get(String(right.candidate.id))) ? 1 : 0;
-            return leftIssued - rightIssued || String(left.candidate.nama || '').localeCompare(String(right.candidate.nama || ''), 'id-ID', { sensitivity: 'base' });
-          });
+          const sortedRows = [...rows].sort((left, right) => String(left.candidate.nama || '').localeCompare(String(right.candidate.nama || ''), 'id-ID', { sensitivity: 'base' }));
           return <section key={department} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3"><div className="flex items-center gap-3"><input type="checkbox" aria-label={'Tandai semua lencana ' + department} checked={allBadgesIssued} disabled={!editable || (!academyOpen && !allBadgesIssued) || Boolean(savingId)} onChange={(event) => setDepartmentBadges(rows, event.target.checked ? 'ISSUED' : 'PENDING')} className="h-4 w-4 accent-[#1E3A2B]" /><div><h4 className="text-sm font-bold text-slate-900">{department}</h4><p className="text-xs text-slate-500">{rows.length} kandidat · {editable ? 'ubah status penerimaan' : 'hanya lihat'}</p></div></div><button type="button" disabled={!editable || !academyOpen || Boolean(savingId) || allBadgesIssued} onClick={() => setDepartmentBadges(rows, 'ISSUED')} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50">☑️ Tandai Semua Lencana Diberikan</button></header>
             <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2.5">Kandidat</th><th className="px-3 py-2.5">CID</th><th className="px-3 py-2.5">Status lencana</th><th className="px-3 py-2.5">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{sortedRows.map(({ candidate }) => {
             const status = equipmentByCandidate.get(String(candidate.id));
             const busy = savingId === String(candidate.id);
             const issued = isEquipmentIssued(status);
-            return <tr key={candidate.id} data-sort-row={'equipment-' + candidate.id} className="hover:bg-slate-50/70"><td className="px-4 py-2.5 font-semibold text-slate-800">{candidate.nama}</td><td className="px-3 py-2.5 text-xs text-slate-500">{candidate.cid || 'Belum dicatat'}</td><td className="px-3 py-2.5"><span className={'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ' + (issued ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700')}><span aria-hidden="true">{issued ? '🟢' : '🔴'}</span>{issued ? 'Diberikan' : 'Belum Diberikan'}</span></td><td className="px-3 py-2.5"><button type="button" disabled={!editable || (!academyOpen && !issued) || busy || Boolean(savingId && !busy)} onClick={() => setEquipmentStatus(candidate.id, 'KIT', issued ? 'PENDING' : 'ISSUED')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{issued ? 'Tandai Belum Diberikan' : 'Berikan Lencana'}</button></td></tr>;
+            return <tr key={candidate.id} className="hover:bg-slate-50/70"><td className="px-4 py-2.5 font-semibold text-slate-800">{candidate.nama}</td><td className="px-3 py-2.5 text-xs text-slate-500">{candidate.cid || 'Belum dicatat'}</td><td className="px-3 py-2.5"><span className={'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ' + (issued ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700')}><span aria-hidden="true">{issued ? '🟢' : '🔴'}</span>{issued ? 'Diberikan' : 'Belum Diberikan'}</span></td><td className="px-3 py-2.5"><button type="button" disabled={!editable || (!academyOpen && !issued) || busy || Boolean(savingId && !busy)} onClick={() => setEquipmentStatus(candidate.id, 'KIT', issued ? 'PENDING' : 'ISSUED')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{issued ? 'Tandai Belum Diberikan' : 'Berikan Lencana'}</button></td></tr>;
           })}</tbody></table></div></section>;
         })}
       </div>}
