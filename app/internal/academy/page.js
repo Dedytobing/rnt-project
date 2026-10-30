@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BatchContext } from '../BatchContext';
+import { readClientData, writeClientData } from '@/lib/client-data-cache';
 import { isStageWindowOpen } from '@/lib/stage-access';
 
 function formatTime(value) {
@@ -50,7 +51,7 @@ const AttendanceRowItem = memo(function AttendanceRowItem({ candidate, departmen
 });
 
 export default function AcademyAttendancePage() {
-  const { selectedBatch } = useContext(BatchContext);
+  const { selectedBatch, cacheScope = 'staff' } = useContext(BatchContext);
   const selectedBatchId = selectedBatch?.id;
   const [data, setData] = useState({ candidates: [], batches: [], attendance: [], personnel: [], department: '', role: 'STAFF', personnelId: '' });
   const [equipment, setEquipment] = useState({ statuses: [] });
@@ -76,8 +77,15 @@ export default function AcademyAttendancePage() {
 
   const refresh = useCallback(async () => {
     if (!selectedBatchId) return;
+    const cacheKey = `${cacheScope}:academy:${selectedBatchId}`;
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
+    const cachedData = readClientData(cacheKey);
+    if (cachedData) {
+      setData(cachedData);
+      if (cachedData.equipment) setEquipment(cachedData.equipment);
+      setLoading(false);
+    }
     try {
       const [response, equipmentResponse] = await Promise.all([
         fetch(`/api/internal/academy?batch_id=${encodeURIComponent(selectedBatchId)}`, { cache: 'no-store' }),
@@ -85,8 +93,10 @@ export default function AcademyAttendancePage() {
       ]);
       const [result, equipmentResult] = await Promise.all([response.json(), equipmentResponse.json()]);
       if (!response.ok || !result.success) throw new Error(result.error || 'Daftar Academy gagal dimuat.');
+      const nextStatuses = equipmentResult.success ? equipmentResult.statuses || [] : [];
+      writeClientData(cacheKey, { ...result, equipment: { statuses: nextStatuses } });
       setData(result);
-      if (equipmentResult.success) setEquipment({ statuses: equipmentResult.statuses || [] });
+      if (equipmentResult.success) setEquipment({ statuses: nextStatuses });
       setError('');
       setLastSyncedAt(new Date().toISOString());
     } catch (issue) {
@@ -95,10 +105,10 @@ export default function AcademyAttendancePage() {
       refreshInFlight.current = false;
       setLoading(false);
     }
-  }, [selectedBatchId]);
+  }, [selectedBatchId, cacheScope]);
 
   useEffect(() => {
-    setSelectedAttendanceIds(new Set());
+    queueMicrotask(() => setSelectedAttendanceIds(new Set()));
   }, [selectedBatchId]);
 
   useEffect(() => {
@@ -145,6 +155,10 @@ export default function AcademyAttendancePage() {
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Absensi gagal disimpan.');
       if (pendingAttendance.current.get(key)?.requestId === requestId) {
+        const markSaved = (attendance) => attendance.map((row) => String(row.candidate_id) === key ? { ...row, updated_by: previous?.updated_by || 'Tersimpan' } : row);
+        setData((current) => ({ ...current, attendance: markSaved(current.attendance) }));
+        const cached = readClientData(`${cacheScope}:academy:${selectedBatch.id}`);
+        if (cached) writeClientData(`${cacheScope}:academy:${selectedBatch.id}`, { ...cached, attendance: markSaved(cached.attendance || []) });
         setMessage(`Status ${statusLabel(status).toLowerCase()} berhasil diperbarui.`);
         pendingAttendance.current.delete(key);
         setPendingAttendanceIds((current) => { const next = new Set(current); next.delete(key); return next; });
@@ -161,7 +175,7 @@ export default function AcademyAttendancePage() {
         setPendingAttendanceIds((current) => { const next = new Set(current); next.delete(key); return next; });
       }
     }
-  }, [attendanceByCandidate, refresh, selectedBatch]);
+  }, [attendanceByCandidate, cacheScope, refresh, selectedBatch]);
 
   const handleAttendanceRowStatus = useCallback((candidate, status) => {
     const candidateId = String(candidate.id);
@@ -197,6 +211,20 @@ export default function AcademyAttendancePage() {
   const setEquipmentStatus = async (candidateId, item, status) => {
     const key = String(candidateId);
     if (savingId) return;
+    const cacheKey = `${cacheScope}:academy:${selectedBatch.id}`;
+    const previous = equipmentByCandidate.get(key) || null;
+    const optimistic = {
+      ...(previous || { candidate_id: key, batch_id: selectedBatch.id }),
+      ...(item === 'KEY' ? { key_status: status } : item === 'BADGE' || item === 'KIT' ? { badge_status: status } : {}),
+      ...(item === 'KIT' ? { key_status: status } : {}),
+      updated_by: 'Menyinkronkan…', updated_at: new Date().toISOString(),
+    };
+    const updateStatuses = (statuses, value) => previous
+      ? statuses.map((row) => String(row.candidate_id) === key ? value : row)
+      : [...statuses, value];
+    setEquipment((current) => ({ ...current, statuses: updateStatuses(current.statuses, optimistic) }));
+    const cached = readClientData(cacheKey);
+    if (cached) writeClientData(cacheKey, { ...cached, equipment: { statuses: updateStatuses(cached.equipment?.statuses || [], optimistic) } });
     setError(''); setMessage(''); setSavingId(key);
     try {
       const response = await fetch('/api/internal/interview-equipment', {
@@ -205,9 +233,21 @@ export default function AcademyAttendancePage() {
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Status kunci/lencana gagal disimpan.');
-      setMessage(`${item === 'KIT' ? 'Lencana' : item === 'KEY' ? 'Kunci' : 'Lencana'} berhasil diperbarui.`);
-      await refresh();
-    } catch (issue) { setError(issue.message || 'Status kunci/lencana gagal disimpan.'); }
+      const successMessage = `${item === 'KIT' ? 'Lencana' : item === 'KEY' ? 'Kunci' : 'Lencana'} berhasil diperbarui.`;
+      setMessage(successMessage);
+      const confirmedBy = previous?.updated_by || 'Tersimpan';
+      setEquipment((current) => ({ ...current, statuses: current.statuses.map((row) => String(row.candidate_id) === key ? { ...row, updated_by: confirmedBy } : row) }));
+      const latestCache = readClientData(cacheKey);
+      if (latestCache) writeClientData(cacheKey, { ...latestCache, equipment: { statuses: (latestCache.equipment?.statuses || []).map((row) => String(row.candidate_id) === key ? { ...row, updated_by: confirmedBy } : row) } });
+    } catch (issue) {
+      setEquipment((current) => ({ ...current, statuses: previous
+        ? current.statuses.map((row) => String(row.candidate_id) === key ? previous : row)
+        : current.statuses.filter((row) => String(row.candidate_id) !== key) }));
+      if (cached) writeClientData(cacheKey, { ...cached, equipment: { statuses: previous
+        ? (cached.equipment?.statuses || []).map((row) => String(row.candidate_id) === key ? previous : row)
+        : (cached.equipment?.statuses || []).filter((row) => String(row.candidate_id) !== key) } });
+      setError(issue.message || 'Status kunci/lencana gagal disimpan. Perubahan dibatalkan.');
+    }
     finally { setSavingId(''); }
   };
 
@@ -234,8 +274,25 @@ export default function AcademyAttendancePage() {
 
   const setSelectedAttendanceStatus = async (rows, status, excuseReason = '') => {
     if (savingId) return;
-    setError(''); setMessage(''); setSavingId('bulk-attendance');
     const selectedRows = rows.filter(({ candidate }) => selectedAttendanceIds.has(String(candidate.id)));
+    if (!selectedRows.length) return;
+    const cacheKey = `${cacheScope}:academy:${selectedBatch.id}`;
+    const previousById = new Map(selectedRows.map(({ candidate }) => [String(candidate.id), attendanceByCandidate.get(String(candidate.id)) || null]));
+    const optimisticAttendance = (attendance) => {
+      const next = [...attendance];
+      for (const { candidate } of selectedRows) {
+        const key = String(candidate.id);
+        const entry = { ...(previousById.get(key) || {}), candidate_id: key, batch_id: selectedBatch.id, attendance_status: status, excuse_reason: status === 'EXCUSED' ? excuseReason : null, updated_by: 'Menyinkronkan…', updated_at: new Date().toISOString() };
+        const index = next.findIndex((row) => String(row.candidate_id) === key);
+        if (index < 0) next.push(entry);
+        else next[index] = entry;
+      }
+      return next;
+    };
+    setData((current) => ({ ...current, attendance: optimisticAttendance(current.attendance) }));
+    const cached = readClientData(cacheKey);
+    if (cached) writeClientData(cacheKey, { ...cached, attendance: optimisticAttendance(cached.attendance || []) });
+    setError(''); setMessage(''); setSavingId('bulk-attendance');
     try {
       const results = await Promise.allSettled(selectedRows.map(async ({ candidate }) => {
         const response = await fetch('/api/internal/academy', {
@@ -246,50 +303,103 @@ export default function AcademyAttendancePage() {
         if (!response.ok || !result.success) throw new Error(result.error || `Absensi ${candidate.nama} gagal disimpan.`);
         return result;
       }));
-      const failure = results.find((result) => result.status === 'rejected');
-      if (failure) throw failure.reason;
-      if (results.length) {
-        setMessage(`Absensi ${selectedRows.length} kandidat berhasil diperbarui.`);
-        setSelectedAttendanceIds((current) => {
-          const next = new Set(current);
-          for (const { candidate } of selectedRows) next.delete(String(candidate.id));
+      const failures = results.flatMap((result, index) => result.status === 'rejected' ? [{ result, candidate: selectedRows[index].candidate }] : []);
+      const failedIds = new Set(failures.map(({ candidate }) => String(candidate.id)));
+      if (failures.length) {
+        const rollbackFailures = (attendance) => {
+          const next = attendance.filter((row) => !failedIds.has(String(row.candidate_id)) || previousById.get(String(row.candidate_id)) !== null);
+          for (const { candidate } of failures) {
+            const key = String(candidate.id);
+            const previous = previousById.get(key);
+            if (!previous) continue;
+            const index = next.findIndex((row) => String(row.candidate_id) === key);
+            if (index >= 0) next[index] = previous;
+          }
           return next;
-        });
+        };
+        setData((current) => ({ ...current, attendance: rollbackFailures(current.attendance) }));
+        const latestCache = readClientData(cacheKey);
+        if (latestCache) writeClientData(cacheKey, { ...latestCache, attendance: rollbackFailures(latestCache.attendance || []) });
+        setError(failures[0].result.reason?.message || `${failures.length} status absensi gagal disimpan.`);
+        setToast(failures[0].result.reason?.message || `${failures.length} status absensi gagal disimpan.`);
       }
-      await refresh();
-    } catch (issue) {
-      setError(issue.message || 'Absensi kandidat terpilih gagal disimpan.');
-      await refresh();
+      const successfulRows = selectedRows.filter(({ candidate }) => !failedIds.has(String(candidate.id)));
+      const successfulIds = new Set(successfulRows.map(({ candidate }) => String(candidate.id)));
+      const markSuccessful = (attendance) => attendance.map((row) => successfulIds.has(String(row.candidate_id)) ? { ...row, updated_by: previousById.get(String(row.candidate_id))?.updated_by || 'Tersimpan' } : row);
+      setData((current) => ({ ...current, attendance: markSuccessful(current.attendance) }));
+      const latestCache = readClientData(cacheKey);
+      if (latestCache) writeClientData(cacheKey, { ...latestCache, attendance: markSuccessful(latestCache.attendance || []) });
+      setSelectedAttendanceIds((current) => {
+        const next = new Set(current);
+        for (const { candidate } of successfulRows) next.delete(String(candidate.id));
+        return next;
+      });
+      if (successfulRows.length) setMessage(`Absensi ${successfulRows.length} kandidat berhasil diperbarui${failures.length ? `; ${failures.length} gagal` : ''}.`);
     } finally { setSavingId(''); }
   };
 
   const setDepartmentBadges = async (rows, status) => {
     if (savingId) return;
-    setError(''); setMessage(''); setSavingId('bulk-equipment');
-    try {
-      const targetIssued = status === 'ISSUED';
-      const rowsToUpdate = rows.filter(({ candidate }) => {
-        const current = equipmentByCandidate.get(String(candidate.id));
-        const targetStatus = targetIssued ? 'ISSUED' : 'PENDING';
-        return (current?.key_status || 'PENDING') !== targetStatus || (current?.badge_status || 'PENDING') !== targetStatus;
+    const targetStatus = status === 'ISSUED' ? 'ISSUED' : 'PENDING';
+    const rowsToUpdate = rows.filter(({ candidate }) => {
+      const current = equipmentByCandidate.get(String(candidate.id));
+      return (current?.key_status || 'PENDING') !== targetStatus || (current?.badge_status || 'PENDING') !== targetStatus;
+    });
+    if (!rowsToUpdate.length) return;
+    const cacheKey = `${cacheScope}:academy:${selectedBatch.id}`;
+    const previousById = new Map(rowsToUpdate.map(({ candidate }) => [String(candidate.id), equipmentByCandidate.get(String(candidate.id)) || null]));
+    const updateStatuses = (statuses, ids = new Set(rowsToUpdate.map(({ candidate }) => String(candidate.id))), saved = false) => {
+      const next = [...statuses];
+      for (const { candidate } of rowsToUpdate) {
+        const key = String(candidate.id);
+        if (!ids.has(key)) continue;
+        const previous = previousById.get(key);
+        const value = { ...(previous || { candidate_id: key, batch_id: selectedBatch.id }), key_status: targetStatus, badge_status: targetStatus, updated_by: saved ? previous?.updated_by || 'Tersimpan' : 'Menyinkronkan…', updated_at: new Date().toISOString() };
+        const index = next.findIndex((row) => String(row.candidate_id) === key);
+        if (index < 0) next.push(value);
+        else next[index] = value;
+      }
+      return next;
+    };
+    const rollbackFailures = (statuses, failedIds) => {
+      const next = statuses.filter((row) => !failedIds.has(String(row.candidate_id)) || previousById.get(String(row.candidate_id)) !== null);
+      for (const id of failedIds) {
+        const previous = previousById.get(id);
+        if (!previous) continue;
+        const index = next.findIndex((row) => String(row.candidate_id) === id);
+        if (index >= 0) next[index] = previous;
+      }
+      return next;
+    };
+    setEquipment((current) => ({ ...current, statuses: updateStatuses(current.statuses) }));
+    const cached = readClientData(cacheKey);
+    if (cached) writeClientData(cacheKey, { ...cached, equipment: { statuses: updateStatuses(cached.equipment?.statuses || []) } });
+    setError(''); setMessage('Status lencana diperbarui. Menyinkronkan…'); setSavingId('bulk-equipment');
+    const results = await Promise.allSettled(rowsToUpdate.map(async ({ candidate }) => {
+      const response = await fetch('/api/internal/interview-equipment', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId: String(candidate.id), batchId: selectedBatch.id, item: 'KIT', status }),
       });
-      const results = await Promise.allSettled(rowsToUpdate.map(async ({ candidate }) => {
-        const response = await fetch('/api/internal/interview-equipment', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ candidateId: String(candidate.id), batchId: selectedBatch.id, item: 'KIT', status }),
-        });
-        const result = await response.json();
-        if (!response.ok || !result.success) throw new Error(result.error || `Status lencana ${candidate.nama} gagal disimpan.`);
-        return result;
-      }));
-      const failure = results.find((result) => result.status === 'rejected');
-      if (failure) throw failure.reason;
-      if (results.length) setMessage(`Status lencana ${rowsToUpdate.length} kandidat berhasil diperbarui.`);
-      await refresh();
-    } catch (issue) {
-      setError(issue.message || 'Status lencana kandidat gagal disimpan.');
-      await refresh();
-    } finally { setSavingId(''); }
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || `Status lencana ${candidate.nama} gagal disimpan.`);
+    }));
+    const failures = results.flatMap((result, index) => result.status === 'rejected' ? [{ result, candidate: rowsToUpdate[index].candidate }] : []);
+    const failedIds = new Set(failures.map(({ candidate }) => String(candidate.id)));
+    if (failures.length) {
+      setEquipment((current) => ({ ...current, statuses: rollbackFailures(current.statuses, failedIds) }));
+      const latest = readClientData(cacheKey);
+      if (latest) writeClientData(cacheKey, { ...latest, equipment: { statuses: rollbackFailures(latest.equipment?.statuses || [], failedIds) } });
+      setError(failures[0].result.reason?.message || `${failures.length} status lencana gagal disimpan.`);
+      setToast(failures[0].result.reason?.message || `${failures.length} status lencana gagal disimpan.`);
+    }
+    const successful = rowsToUpdate.length - failures.length;
+    if (successful) {
+      setEquipment((current) => ({ ...current, statuses: updateStatuses(current.statuses, new Set(rowsToUpdate.filter(({ candidate }) => !failedIds.has(String(candidate.id))).map(({ candidate }) => String(candidate.id))), true) }));
+      const latest = readClientData(cacheKey);
+      if (latest) writeClientData(cacheKey, { ...latest, equipment: { statuses: updateStatuses(latest.equipment?.statuses || [], new Set(rowsToUpdate.filter(({ candidate }) => !failedIds.has(String(candidate.id))).map(({ candidate }) => String(candidate.id))), true) } });
+      setMessage(`Status lencana ${successful} kandidat berhasil diperbarui${failures.length ? `; ${failures.length} gagal` : ''}.`);
+    }
+    setSavingId('');
   };
 
   const candidateRows = useMemo(() => data.candidates.map((candidate) => ({
@@ -313,7 +423,7 @@ export default function AcademyAttendancePage() {
   return <div className="space-y-5">
     {toast && <div role="alert" className="fixed right-4 top-4 z-[60] max-w-sm rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800 shadow-lg">{toast}</div>}
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#1E3A2B]">Academy · {selectedBatch?.name || 'Batch belum dipilih'}</p><h2 className="mt-1 text-2xl font-bold text-slate-900">Absensi Kandidat</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Absensi dan pembagian perlengkapan dikelompokkan menurut departemen. Perubahan tersinkron untuk personel lain di batch ini.</p></div><div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold ${realtimeConnected ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}><span className={`h-2.5 w-2.5 rounded-full ${realtimeConnected ? 'animate-pulse bg-emerald-600' : 'bg-amber-500'}`}/>{realtimeConnected ? 'LIVE · tersambung' : 'Sinkronisasi otomatis'}</div></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-800">Academy · {selectedBatch?.name || 'Batch belum dipilih'}</p><h2 className="mt-1 text-2xl font-bold text-slate-900">Absensi Kandidat</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Absensi dan pembagian perlengkapan dikelompokkan menurut departemen. Perubahan tersinkron untuk personel lain di batch ini.</p></div><div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold ${realtimeConnected ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}><span className={`h-2.5 w-2.5 rounded-full ${realtimeConnected ? 'animate-pulse bg-emerald-600' : 'bg-amber-500'}`}/>{realtimeConnected ? 'LIVE · tersambung' : 'Sinkronisasi otomatis'}</div></div>
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Kandidat</small><strong className="mt-1 block text-xl text-slate-900">{data.candidates.length}</strong></div><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Departemen aktif</small><strong className="mt-1 block text-xl text-slate-900">{activeDepartmentCount}</strong></div><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Hadir</small><strong className="mt-1 block text-xl text-emerald-700">{presentCount}</strong></div><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Terakhir sinkron</small><strong className="mt-1 block text-sm text-slate-800">{lastSyncedAt ? formatTime(lastSyncedAt) : 'Memuat…'}</strong></div></div>
       {error && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}{message && <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
     </section>

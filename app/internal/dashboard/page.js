@@ -12,6 +12,8 @@ import {
 import { Doughnut, Bar } from 'react-chartjs-2';
 import Pagination, { PAGE_SIZE } from '../components/Pagination';
 import { BatchContext, candidatesUrl } from '../BatchContext';
+import { readClientData, writeClientData } from '@/lib/client-data-cache';
+import { displayStaffFirstNames } from '@/lib/staff-name-utils';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
@@ -29,15 +31,6 @@ function normalizeMdtStatus(value) {
   if (status === 'red' || status.includes('black') || status.includes('penalty') || status.includes('penalti')) return 'Red';
   if (status === 'yellow' || status === 'orange') return 'Orange';
   return status ? 'Orange' : '';
-}
-
-function displayStaffFirstNames(value) {
-  return String(value || '')
-    .split(/\s*[,;|]\s*/)
-    .map((name) => name.trim().split(/\s+/)[0])
-    .filter(Boolean)
-    .map((name) => `${name.charAt(0).toLocaleUpperCase('id-ID')}${name.slice(1).toLocaleLowerCase('id-ID')}`)
-    .join(', ') || '—';
 }
 
 const recruitmentStages = [
@@ -93,7 +86,7 @@ const departmentLogoPlugin = {
 };
 
 export default function InternalDashboard() {
-  const { selectedBatch } = useContext(BatchContext);
+  const { selectedBatch, cacheScope = 'staff' } = useContext(BatchContext);
   const [candidates, setCandidates] = useState([]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -108,23 +101,37 @@ export default function InternalDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    setLoading(true);
-    setLoadError('');
+    let active = true;
+    const cacheKey = `${cacheScope}:dashboard:${selectedBatch?.id || ''}`;
+    const cachedCandidates = readClientData(cacheKey);
+    if (cachedCandidates) {
+      queueMicrotask(() => {
+        if (active) {
+          setCandidates(cachedCandidates);
+          setLoading(false);
+        }
+      });
+    } else queueMicrotask(() => { if (active) setLoading(true); });
+    queueMicrotask(() => { if (active) setLoadError(''); });
     fetch(candidatesUrl(selectedBatch?.id))
       .then(async response => {
         const result = await response.json();
         if (!response.ok || !result.success) {
           throw new Error(result.error || 'Data kandidat gagal dimuat.');
         }
-        setCandidates(result.data || []);
+        if (!active) return;
+        const nextCandidates = result.data || [];
+        writeClientData(cacheKey, nextCandidates);
+        setCandidates(nextCandidates);
       })
-      .catch(error => setLoadError(error.message || 'Data kandidat gagal dimuat.'))
-      .finally(() => setLoading(false));
-  }, [selectedBatch?.id]);
+      .catch(error => { if (active) setLoadError(error.message || 'Data kandidat gagal dimuat.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [selectedBatch?.id, cacheScope]);
 
   // Reset ke halaman 1 setiap kali filter atau kata kunci berubah
   useEffect(() => {
-    setCurrentPage(1);
+    queueMicrotask(() => setCurrentPage(1));
   }, [search, filterStatus, filterInterview, filterMdt, filterDept]);
 
   useEffect(() => {
@@ -386,7 +393,7 @@ export default function InternalDashboard() {
                     : c.status_interview || 'Belum Diputuskan';
                   return (
                     <tr key={c.id} className="dashboard-candidate-row align-middle border-b border-slate-100 hover:bg-slate-50/80 transition">
-                      <td className="p-3 align-middle text-left font-bold text-slate-800"><button type="button" title={c.nama} onClick={() => setDetailCandidate(c)} aria-haspopup="dialog" className="text-left text-slate-800 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">{c.nama}</button></td>
+                      <td className="p-3 align-middle text-left font-bold text-slate-800"><button type="button" title={`Lihat detail ${c.nama}`} onClick={() => setDetailCandidate(c)} aria-haspopup="dialog" className="dashboard-candidate-name text-left text-slate-800 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">{c.nama}</button></td>
                       <td className="p-3 align-middle text-center text-slate-600">{c.gender || '—'}</td>
                       <td className="p-3 align-middle text-center">
                         <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
@@ -443,6 +450,9 @@ export default function InternalDashboard() {
               <DetailStatus label="MDT" value={normalizeMdtStatus(detailCandidate.mdt_check) || 'Belum diperiksa'} tone={normalizeMdtStatus(detailCandidate.mdt_check) === 'Green' ? 'green' : normalizeMdtStatus(detailCandidate.mdt_check) === 'Red' ? 'red' : 'amber'} />
               <DetailStatus label="Status Interview" value={detailCandidate.status_cv !== 'Interview' ? 'Belum masuk tahap' : detailCandidate.status_interview || 'Belum ada keputusan'} tone={detailCandidate.status_interview === 'Passed' ? 'green' : detailCandidate.status_interview === 'Failed' ? 'red' : detailCandidate.status_interview === 'Pending' ? 'amber' : 'slate'} />
             </div><div className="grid grid-cols-2 gap-2">
+              <DetailField label="CID" value={detailCandidate.cid || 'Belum dicatat'} />
+              <DetailField label="Status CID" value={detailCandidate.cid_status || (detailCandidate.cid ? 'Aktif' : 'Belum tersedia')} />
+              {detailCandidate.cid_reason && <DetailField label="Catatan status CID" value={detailCandidate.cid_reason} />}
               <DetailField label="Minat departemen" value={detailCandidate.dept_preference || 'Belum diisi'} />
               <DetailField label="Departemen final" value={detailCandidate.mapping_dept || 'Belum ditetapkan'} />
               <DetailField label="Reviewer CV" value={detailCandidate.officer_reviewer || '—'} />

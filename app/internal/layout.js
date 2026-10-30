@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { getBatchStatus } from '@/lib/batch-status';
 import { BatchContext } from './BatchContext';
+import { clearClientData } from '@/lib/client-data-cache';
 
 const SELECTED_BATCH_STORAGE_KEY = 'rnt_selected_batch_id';
 const BUSINESS_TIME_ZONE = 'Asia/Jakarta';
@@ -374,6 +375,7 @@ function InternalLayoutContent({ children }) {
 
   const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) || null;
   const serverClockDisplay = serverClockNow === null ? null : formatSystemServerTime(serverClockNow);
+  const cacheScope = `${isAuth ? 'staff' : 'guest'}:${userRole}:${officerDepartment}:${officerName}`;
 
   const chooseBatch = (batchId) => {
     const batch = batches.find((item) => item.id === batchId);
@@ -432,17 +434,27 @@ function InternalLayoutContent({ children }) {
       return;
     }
     for (const key of scheduleKeys) fields[key] = fromDateTimeInput(fields[key]);
+    const previousBatches = batches;
+    const isEditing = batchEditor === 'edit';
+    const batchId = isEditing ? batchForm.id : `pending-${Date.now()}`;
+    const existingBatch = batches.find((batch) => batch.id === batchId) || batches.find((batch) => batch.id === batchForm.id);
+    const optimisticBatch = { ...existingBatch, ...fields, id: batchId, is_active: existingBatch?.is_active || false, created_at: existingBatch?.created_at || new Date().toISOString() };
+    setBatches((current) => isEditing
+      ? current.map((batch) => batch.id === batchForm.id ? optimisticBatch : batch)
+      : [optimisticBatch, ...current]);
+    setBatchEditor(null);
     try {
       const response = await fetch('/api/internal/batches', {
-        method: batchEditor === 'edit' ? 'PATCH' : 'POST',
+        method: isEditing ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(batchEditor === 'edit' ? { id: batchForm.id, ...fields } : fields),
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Batch gagal disimpan.');
-      setBatchEditor(null);
-      reloadBatches();
+      setBatches((current) => current.map((batch) => batch.id === batchId || (isEditing && batch.id === batchForm.id) ? result.batch : batch));
     } catch (error) {
+      setBatches(previousBatches);
+      setBatchEditor(isEditing ? 'edit' : 'create');
       setBatchFormError(error.message || 'Batch gagal disimpan.');
     } finally {
       setBatchSaving(false);
@@ -451,6 +463,9 @@ function InternalLayoutContent({ children }) {
 
   const deleteBatch = async (batch) => {
     if (!window.confirm(`Hapus batch “${batch.name}”? Batch akan disembunyikan dan dapat dipulihkan dari database.`)) return;
+    const previousBatches = batches;
+    setBatches((current) => current.filter((item) => item.id !== batch.id));
+    setBatchSaving(true);
     setBatchError('');
     try {
       const response = await fetch('/api/internal/batches', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: batch.id }) });
@@ -460,10 +475,14 @@ function InternalLayoutContent({ children }) {
         sessionStorage.removeItem(SELECTED_BATCH_STORAGE_KEY);
         localStorage.removeItem(SELECTED_BATCH_STORAGE_KEY);
         setSelectedBatchId('');
+        setShowBatchPicker(true);
+        router.replace('/internal/select-batch');
       }
-      reloadBatches();
     } catch (error) {
+      setBatches(previousBatches);
       setBatchError(error.message || 'Batch gagal dihapus.');
+    } finally {
+      setBatchSaving(false);
     }
   };
 
@@ -517,6 +536,7 @@ function InternalLayoutContent({ children }) {
         setSavedProfile(null);
       }
 
+      clearClientData();
       sessionStorage.setItem('officer_session', data.officerName);
       sessionStorage.setItem('officer_role', data.userRole);
       setOfficerName(data.officerName);
@@ -542,6 +562,7 @@ function InternalLayoutContent({ children }) {
 
   const handleLogout = async () => {
     await fetch('/api/internal/session', { method: 'DELETE' }).catch(() => {});
+    clearClientData();
     const lockedProfile = {
       name: officerName,
       rank: officerRank,
@@ -864,7 +885,7 @@ function InternalLayoutContent({ children }) {
   }
 
   return (
-    <BatchContext.Provider value={{ selectedBatch }}>
+    <BatchContext.Provider value={{ selectedBatch, cacheScope }}>
     <div className="min-h-screen bg-slate-100 flex staff-workspace">
       <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between p-6 shrink-0 staff-sidebar">
         <div className="space-y-6">
@@ -888,6 +909,7 @@ function InternalLayoutContent({ children }) {
             {userRole === 'ADMIN' && <>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/audit-log` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'audit-log' || pathname === '/internal/audit-logs' ? 'active' : ''}`}><span>≡</span>Audit log<span className="nav-admin-tag">RNT</span></Link>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/management` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'management' || pathname === '/internal/management' ? 'active' : ''}`}><span>⚙</span>Manajemen<span className="nav-admin-tag">RNT</span></Link>
+              <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/bonus` : '/internal/bonus'} className={`staff-nav-link ${routeSection === 'bonus' || pathname === '/internal/bonus' ? 'active' : ''}`}><span>$</span>Kalkulator Bonus<span className="nav-admin-tag">RNT</span></Link>
             </>}
           </nav>
         </div>
@@ -913,7 +935,7 @@ function InternalLayoutContent({ children }) {
           <div><div className="staff-breadcrumb">RNT PROJECT <span>/</span> PERSONNEL</div><h1>{pageTitle}</h1><p>{pageSubtitle}</p></div>
           <div className="staff-top-actions inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200/60 bg-slate-100/80 p-1.5 dark:border-emerald-800/40 dark:bg-emerald-950/40"><div className="server-time-widget inline-flex min-w-0 items-center gap-2 px-2" aria-label="Waktu server sistem, zona waktu WIB" title="Waktu server sistem · Asia/Jakarta"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-emerald-300"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" /><path d="M12 7v5l3.2 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg><span className="font-mono text-[11px] font-medium tabular-nums text-slate-700 dark:text-emerald-300">{serverClockDisplay?.time || '--:--:--'}</span><span aria-hidden="true" className="text-[10px] text-slate-400 dark:text-emerald-800/80">·</span><span className="server-time-date whitespace-nowrap text-[9px] text-slate-500 dark:text-emerald-300/80">{serverClockDisplay?.date || 'Menyinkronkan…'}</span></div><span className="staff-live"><i /> SISTEM AKTIF</span>{selectedBatch && <button type="button" aria-label={`Ganti batch aktif, saat ini ${selectedBatch.name}`} onClick={() => setShowBatchPicker(true)} className="staff-batch-switcher inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-slate-200/60 bg-white/60 px-2.5 py-1 text-[10px] font-medium text-slate-700 hover:bg-white dark:border-emerald-800/40 dark:bg-emerald-950/20 dark:text-emerald-200 dark:hover:bg-emerald-900/40"><span className="text-slate-500 dark:text-emerald-300/70">Batch:</span><span className="truncate">{selectedBatch.name}</span><svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-emerald-300/70"><path d="m5.5 7.5 4.5 4 4.5-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></button>}<Link href={`/candidate?source=internal&returnTo=${encodeURIComponent(pathname)}`} className="staff-new-candidate rounded-md px-2.5 py-1.5 text-[10px]"><span>＋</span> Kandidat baru</Link></div>
         </header>
-        <div className="staff-content">{children}</div>
+        <div className="staff-content">{(routeSection === 'bonus' || pathname === '/internal/bonus') && userRole !== 'ADMIN' ? <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-5 text-sm font-semibold text-rose-800">Kalkulator Bonus hanya dapat diakses Admin Team RNT.</div> : children}</div>
       </main>
     </div>
     </BatchContext.Provider>

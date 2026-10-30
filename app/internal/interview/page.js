@@ -4,6 +4,7 @@ import Image from 'next/image';
 import CandidateLogs from '../components/CandidateLogs';
 import Pagination, { PAGE_SIZE } from '../components/Pagination';
 import { BatchContext, candidatesUrl } from '../BatchContext';
+import { readClientData, writeClientData } from '@/lib/client-data-cache';
 import { DECLINED_REASON_OPTIONS, createDeclinedBbcode } from '@/lib/interview-declined-template';
 
 const LOGO_LSSD = '/logos/lssd.png';
@@ -73,7 +74,7 @@ ${signature || 'Recruitment Staff'}[/right]
 }
 
 export default function InterviewPage() {
-  const { selectedBatch } = useContext(BatchContext);
+  const { selectedBatch, cacheScope = 'staff' } = useContext(BatchContext);
   const [candidates, setCandidates] = useState([]);
   const [queueTab, setQueueTab] = useState('pending');
   const [selectedId, setSelectedId] = useState('');
@@ -112,29 +113,25 @@ export default function InterviewPage() {
     return () => { active = false; };
   }, []);
 
-  const fetchData = async () => {
-    const res = await fetch(candidatesUrl(selectedBatch?.id, 'interview'));
-    const data = await res.json();
-    if (data.success) {
-      setCandidates(data.data.filter(c => c.status_cv === 'Interview'));
-      setCurrentPage(1);
-    }
-  };
-
   useEffect(() => {
     let active = true;
+    const cacheKey = `${cacheScope}:interview:${selectedBatch?.id || ''}`;
+    const cachedCandidates = readClientData(cacheKey);
+    if (cachedCandidates) queueMicrotask(() => { if (active) setCandidates(cachedCandidates); });
     const loadStage = () => fetch(candidatesUrl(selectedBatch?.id, 'interview'))
       .then(async (response) => ({ response, data: await response.json() }))
       .then(({ response, data }) => {
         if (!active) return;
         if (!response.ok || !data.success) { setStageAccessError(data.error || 'Akses interview belum dibuka.'); setCandidates([]); setSelectedId(''); return; }
         setStageAccessError('');
-        setCandidates(data.data.filter((candidate) => candidate.status_cv === 'Interview'));
+        const nextCandidates = data.data.filter((candidate) => candidate.status_cv === 'Interview');
+        writeClientData(cacheKey, nextCandidates);
+        setCandidates(nextCandidates);
       }).catch(() => { if (active) { setCandidates([]); setStageAccessError('Jadwal interview gagal diverifikasi.'); } });
     loadStage();
     const timer = window.setInterval(loadStage, 30000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [selectedBatch?.id]);
+  }, [selectedBatch?.id, cacheScope]);
 
   const pendingCandidates = candidates.filter((candidate) => !candidate.status_interview || candidate.status_interview === '');
   const completedCandidates = candidates.filter((candidate) => Boolean(candidate.status_interview));
@@ -168,43 +165,43 @@ export default function InterviewPage() {
     }
     setValidationError('');
 
-    setLoading(true);
-    
-    const res = await fetch(candidatesUrl(selectedBatch?.id, 'interview'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'UPDATE_INTERVIEW', 
-        id: selectedId, 
-        ...form 
-      })
-    });
-    
-    const data = await res.json();
-    setLoading(false);
-    
-    if (data.success) {
-      const updatedFields = {
+    const candidateBeforeUpdate = candidates.find((candidate) => candidate.id === selectedId);
+    const updatedFields = {
         dept_preference: form.deptPreference,
         interviewer_name: form.interviewerName,
         assist_name: form.assistName,
         status_interview: form.statusInterview,
         notes_interviewer: form.notesInterviewer,
-      };
-      setMsg(form.statusInterview === 'Passed' || form.statusInterview === 'Failed' ? '' : data.message);
-      setSelectedCandidateData((candidate) => candidate?.id === selectedId ? {
-        ...candidate,
-        ...updatedFields,
-      } : candidate);
-      setCandidates((current) => current.map((candidate) => candidate.id === selectedId
-        ? { ...candidate, ...updatedFields }
-        : candidate));
+    };
+    const updatedCandidate = { ...candidateBeforeUpdate, ...updatedFields };
+    const cacheKey = `${cacheScope}:interview:${selectedBatch?.id || ''}`;
+    writeClientData(cacheKey, candidates.map((candidate) => candidate.id === selectedId ? updatedCandidate : candidate));
+    setSelectedCandidateData(updatedCandidate);
+    setCandidates((current) => current.map((candidate) => candidate.id === selectedId ? updatedCandidate : candidate));
+    setMsg('Hasil wawancara diperbarui di tampilan. Menyinkronkan…');
+    setLoading(true);
+    try {
+      const res = await fetch(candidatesUrl(selectedBatch?.id, 'interview'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'UPDATE_INTERVIEW', id: selectedId, ...form }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Hasil wawancara gagal disimpan.');
+      setMsg(form.statusInterview === 'Passed' || form.statusInterview === 'Failed' ? '' : data.message || 'Hasil wawancara berhasil disimpan.');
       if (form.statusInterview === 'Passed') {
         setQueueTab('completed');
         setCurrentPage(1);
       }
-      fetchData();
       setTimeout(() => setMsg(''), 3000);
+    } catch (issue) {
+      writeClientData(cacheKey, candidates.map((candidate) => candidate.id === selectedId ? candidateBeforeUpdate : candidate));
+      setCandidates((current) => current.map((candidate) => candidate.id === selectedId ? candidateBeforeUpdate : candidate));
+      setSelectedCandidateData(candidateBeforeUpdate || null);
+      setValidationError(issue.message || 'Hasil wawancara gagal disimpan. Perubahan dibatalkan.');
+      setMsg('');
+    } finally {
+      setLoading(false);
     }
   };
 

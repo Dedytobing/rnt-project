@@ -2,7 +2,7 @@
 
 import { createContext } from 'react';
 
-export const BatchContext = createContext({ selectedBatch: null });
+export const BatchContext = createContext({ selectedBatch: null, cacheScope: 'staff' });
 
 export function candidatesUrl(batchId, stage) {
   const params = new URLSearchParams();

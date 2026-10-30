@@ -40,7 +40,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #6e9877
 .candidate-form-heading .candidate-announcement { width: 100%; max-width: 100%; box-sizing: border-box; }
 .candidate-form { display: flex; flex-direction: column; }.candidate-form label { margin: 15px 0 7px; color: #35473a; font-size: 10px; font-weight: 700; }.candidate-form label span { color: #bc654f; }
 .candidate-form input,.candidate-form select { width: 100%; min-height: 42px; padding: 0 12px; color: #293a30; background: #fff; border: 1px solid #dfe5de; border-radius: 5px; font-size: 11px; }.candidate-form input::placeholder { color: #a1aaa2; }
-.candidate-field-hint { margin: 6px 0 0; color: #8a958c; font-size: 9px; }.candidate-alert { margin-top: 16px; padding: 11px 12px; border: 1px solid; border-radius: 5px; font-size: 10px; line-height: 1.5; }.candidate-alert.success { color: #326341; background: #eff7ee; border-color: #d4e8d2; }.candidate-alert.error { color: #9b453c; background: #fff2ef; border-color: #f0d2cb; }
+.candidate-field-hint { margin: 6px 0 0; color: #8a958c; font-size: 9px; }.candidate-alert { margin-top: 16px; padding: 11px 12px; border: 1px solid; border-radius: 5px; font-size: 10px; line-height: 1.5; }.candidate-alert.success { color: #326341; background: #eff7ee; border-color: #d4e8d2; }.candidate-alert.error { color: #9b453c; background: #fff2ef; border-color: #f0d2cb; }.candidate-alert.info { color: #315d7b; background: #eef7fc; border-color: #d1e6f3; }
 .candidate-submit { min-height: 43px; width: 100%; margin-top: 21px; padding: 0 14px; display: flex; justify-content: space-between; align-items: center; color: white; background: #254532; border: 0; border-radius: 5px; font-size: 11px; font-weight: 700; cursor: pointer; }.candidate-submit:hover { background: #315a41; }.candidate-submit:disabled { cursor: not-allowed; opacity: .5; }.candidate-submit span { color: #c8e6a6; font-size: 16px; }.candidate-required-note { margin: 12px 0 0; color: #98a198; font-size: 9px; text-align: center; }.candidate-footer { margin: auto auto 0; padding: 20px; color: #9aa49b; font-size: 8px; letter-spacing: 1.2px; text-align: center; }.candidate-footer span { padding: 0 5px; color: #8eae77; }
 
 /* Staff and admin workspace */
@@ -244,7 +244,7 @@ html[data-theme="dark"] .candidate-staff-link:hover { color: #fff; background: #
 html[data-theme="dark"] .candidate-staff-link:hover span { color: #fff; }
 html[data-theme="dark"] .candidate-submit { color: #fff !important; background: #1f442e !important; font-weight: 600; }
 html[data-theme="dark"] .candidate-submit:hover:not(:disabled) { background: #2c5039 !important; }
-html[data-theme="dark"] .candidate-submit:disabled { color: rgb(4 120 87 / 60%) !important; background: rgb(2 44 34 / 60%) !important; border: 1px solid rgb(6 78 59 / 40%) !important; }
+html[data-theme="dark"] .candidate-submit:disabled { color: rgba(77, 255, 204, 0.6) !important; background: rgb(2 44 34 / 60%) !important; border: 1px solid rgb(6 78 59 / 40%) !important; }
 .candidate-header > .candidate-brand, .candidate-header > .candidate-staff-link { align-self: center; }
 
 /* Shared staff portal surfaces, cards, and form controls */
@@ -670,7 +670,7 @@ html[data-theme="dark"] .staff-topbar .staff-live { color: #aab9ad !important; }
 .staff-login-card :where(label, legend) { margin-bottom: 6px; }
 .candidate-footer { color: #68776d; letter-spacing: .6px; }
 .candidate-brand small { color: #68776d; }
-.candidate-kicker { color: #496b52; letter-spacing: 1px; }
+.candidate-kicker { color: #ddd; letter-spacing: 1px; }
 @media (max-width: 560px) {
   .pin-generator-page { padding: 20px 14px; }
   .pin-generator-page > div > section { padding: 22px 18px; }
@@ -1251,3 +1251,20 @@ html[data-theme="dark"] .staff-content .review-page textarea,
 html[data-theme="dark"] .staff-content .interview-page textarea { color: #f1f5f9; background-color: #0f172a; border-color: #475569; }
 html[data-theme="dark"] .staff-content .review-page textarea::placeholder,
 html[data-theme="dark"] .staff-content .interview-page textarea::placeholder { color: #94a3b8; opacity: 1; }
+
+/* Compact the personnel management workspace and keep long rosters inside their cards. */
+.management-personnel-scroll,
+.management-trainer-scroll { overscroll-behavior: contain; border-radius: 0 0 12px 12px; }
+.management-personnel-table,
+.management-trainer-table { font-size: 12px !important; }
+.management-personnel-table th,
+.management-personnel-table td,
+.management-trainer-table th,
+.management-trainer-table td { padding: 7px 9px !important; }
+.management-personnel-table thead,
+.management-trainer-table thead { position: sticky; top: 0; z-index: 2; }
+.management-page > section[aria-label="Sub-menu manajemen"] .management-module-card { min-height: 86px; }
+.management-page details > summary::-webkit-details-marker { display: none; }
+.management-page details > summary::after { content: "+"; float: right; color: #64748b; font-size: 18px; line-height: 1; }
+.management-page details[open] > summary::after { content: "−"; }
+html[data-theme="dark"] .management-page details > summary { color: #e2e8f0; }

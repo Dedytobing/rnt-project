@@ -5,6 +5,7 @@ import InterviewPage from '../../interview/page';
 import ManagementPage from '../../management/page';
 import AcademyPage from '../../academy/page';
 import AuditLogsPage from '../../audit-logs/page';
+import BonusPage from '../../bonus/page';
 
 const pages = {
   dashboard: DashboardPage,
@@ -14,6 +15,7 @@ const pages = {
   academy: AcademyPage,
   absensi: AcademyPage,
   'audit-log': AuditLogsPage,
+  bonus: BonusPage,
 };
 
 export default async function BatchWorkspacePage({ params }) {

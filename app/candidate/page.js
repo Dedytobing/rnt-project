@@ -118,7 +118,7 @@ export default function CandidatePage() {
   const handleCandSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
-    setAlert({ show: false, msg: '', type: '' });
+    setAlert({ show: true, msg: 'Pendaftaran sedang dikirim…', type: 'info' });
 
     try {
       const response = await fetch('/api/candidates', {
@@ -160,7 +160,7 @@ export default function CandidatePage() {
       </header>
 
       <section className="candidate-form-wrap">
-        {showPortalBack && <button type="button" onClick={navigateBack} className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/80">← Kembali ke Portal</button>}
+        {showPortalBack && <button type="button" onClick={navigateBack} className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/60 dark:text-emerald-100 dark:hover:bg-emerald-900/80">← Kembali ke Portal</button>}
         <div className="candidate-form-heading">
           <span className="candidate-kicker">PENDAFTARAN KANDIDAT</span>
           <h1>Form kandidat baru</h1>

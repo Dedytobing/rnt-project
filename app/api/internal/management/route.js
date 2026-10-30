@@ -17,6 +17,7 @@ const personnelAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('SAVE_BLACKLIST'), blacklistId: z.uuid().nullable().optional(), cid: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9]+$/).transform((value) => value.toUpperCase()), status: z.enum(['Recommended', 'Yellowlist', 'Blacklist']), reason: z.string().trim().min(2).max(2000) }).strict(),
   z.object({ action: z.literal('DELETE_BLACKLIST'), blacklistId: z.uuid() }).strict(),
   z.object({ action: z.literal('SAVE_PERSONNEL'), personnelId: z.uuid(), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']), rank: z.string().trim().min(2).max(60), position: z.string().trim().max(100), department: z.enum(['LSPD', 'LSSD', 'SASP']) }).strict(),
+  z.object({ action: z.literal('SET_PERSONNEL_TRAINER'), personnelId: z.uuid(), isTrainer: z.boolean() }).strict(),
   z.object({ action: z.literal('DELETE_PERSONNEL'), personnelId: z.uuid() }).strict(),
   z.object({ action: z.literal('ADD_WHITELIST'), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']) }).strict(),
   z.object({ action: z.literal('BULK_WHITELIST'), entries: z.array(z.object({ fullName: z.string().trim().min(2).max(120), role: z.enum(['STAFF', 'ADMIN']) }).strict()).min(1).max(1000) }).strict(),
@@ -50,7 +51,7 @@ export async function GET(request) {
     if (batchError) throw batchError;
     if (!batch) return NextResponse.json({ success: false, error: 'Batch tidak ditemukan atau sudah dihapus.' }, { status: 404 });
     const [personnel, whitelist, candidates, blacklist] = await Promise.all([
-      db.from('rnt_personnel').select('id,full_name,normalized_name,role,rank,position,department,is_active').order('full_name'),
+      db.from('rnt_personnel').select('id,full_name,normalized_name,role,rank,position,department,is_active,is_trainer').order('full_name'),
       db.from('rnt_personnel_name_whitelist').select('id,full_name,normalized_name,role,is_active,created_at').order('full_name'),
       db.from('candidates').select('id,nama,cid,gender,link_cv,batch_id,deleted_at,deleted_by,status_cv,status_interview,mdt_check,catatan,notes_investigator,notes_interviewer,created_at,mapping_dept,dept_preference').eq('batch_id', batchId.data).order('created_at', { ascending: false }),
       db.from('candidate_blacklist').select('id,cid,status,reason,created_at,updated_at').order('cid'),
@@ -184,6 +185,17 @@ export async function POST(request) {
         : `Menambahkan personel ${action.fullName} dengan akses ${action.role === 'ADMIN' ? 'Admin' : 'Staff'} di departemen ${action.department}.`;
       await recordPersonnelActivity(db, session, previousPerson ? 'PERSONNEL_UPDATED' : 'PERSONNEL_ADDED', action.fullName, details);
       return NextResponse.json({ success: true, personnelId: personnel.id });
+    }
+    if (action.action === 'SET_PERSONNEL_TRAINER') {
+      const { data, error } = await db.from('rnt_personnel')
+        .update({ is_trainer: action.isTrainer })
+        .eq('id', action.personnelId)
+        .eq('is_active', true)
+        .select('id,is_trainer')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return NextResponse.json({ success: false, error: 'Personel aktif tidak ditemukan.' }, { status: 404 });
+      return NextResponse.json({ success: true, isTrainer: data.is_trainer });
     }
     if (action.action === 'DELETE_PERSONNEL') {
       const { data: person, error: lookupError } = await db.from('rnt_personnel').select('id,full_name,normalized_name').eq('id', action.personnelId).maybeSingle();

@@ -3,6 +3,7 @@ import { useState, useEffect, useContext, useRef } from 'react';
 import CandidateLogs from '../components/CandidateLogs';
 import Pagination, { PAGE_SIZE } from '../components/Pagination';
 import { BatchContext, candidatesUrl } from '../BatchContext';
+import { readClientData, writeClientData } from '@/lib/client-data-cache';
 import { DECLINED_REASON_OPTIONS, createDeclinedBbcode } from '@/lib/interview-declined-template';
 
 const PENDING_REASON_OPTIONS = [
@@ -179,7 +180,7 @@ ${signature || 'Recruitment Staff'}[/right]
 }
 
 export default function ReviewPage() {
-  const { selectedBatch } = useContext(BatchContext);
+  const { selectedBatch, cacheScope = 'staff' } = useContext(BatchContext);
   const [candidates, setCandidates] = useState([]);
   const [viewMode, setViewMode] = useState('NEW'); // 'NEW', 'PENDING', atau 'ACCEPTED'
   const [selectedId, setSelectedId] = useState('');
@@ -233,27 +234,22 @@ export default function ReviewPage() {
 
   useEffect(() => {
     let active = true;
+    const cacheKey = `${cacheScope}:review:${selectedBatch?.id || ''}`;
+    const cachedCandidates = readClientData(cacheKey);
+    if (cachedCandidates) queueMicrotask(() => { if (active) setCandidates(cachedCandidates); });
     const loadStage = () => fetch(candidatesUrl(selectedBatch?.id, 'review'))
       .then(async (response) => ({ response, data: await response.json() }))
       .then(({ response, data }) => {
         if (!active) return;
         if (!response.ok || !data.success) { setStageAccessError(data.error || 'Akses review belum dibuka.'); setCandidates([]); setSelectedId(''); return; }
         setStageAccessError('');
+        writeClientData(cacheKey, data.data || []);
         setCandidates(data.data);
       }).catch(() => { if (active) { setCandidates([]); setStageAccessError('Jadwal review gagal diverifikasi.'); } });
     loadStage();
     const timer = window.setInterval(loadStage, 30000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [selectedBatch?.id]);
-
-  const fetchData = async () => {
-    const res = await fetch(candidatesUrl(selectedBatch?.id, 'review'));
-    const data = await res.json();
-    if (data.success) {
-      setCandidates(data.data);
-      setCurrentPage(1);
-    }
-  };
+  }, [selectedBatch?.id, cacheScope]);
 
   const activeReviewCandidates = candidates.filter((candidate) =>
     !['Accepted', 'Rejected'].includes(candidate.status_cv) && !candidate.status_interview
@@ -312,31 +308,36 @@ export default function ReviewPage() {
       return;
     }
 
+    const candidateBeforeUpdate = candidates.find((candidate) => candidate.id === selectedId);
+    const updatedCandidate = { ...candidateBeforeUpdate, ...form, status_cv: form.statusCv, mdt_check: form.mdtCheck, notes_investigator: form.notesInvestigator };
+    const cacheKey = `${cacheScope}:review:${selectedBatch?.id || ''}`;
+    writeClientData(cacheKey, candidates.map((candidate) => candidate.id === selectedId ? updatedCandidate : candidate));
+    setSelectedCandidateData(updatedCandidate);
+    setCandidates((current) => current.map((candidate) => candidate.id === selectedId ? { ...candidate, ...updatedCandidate } : candidate));
+    setViewMode(form.statusCv === 'Pending' ? 'PENDING' : form.statusCv === 'Interview' ? 'ACCEPTED' : form.statusCv === 'Rejected' ? 'REJECTED' : 'NEW');
+    setCurrentPage(1);
+    setCopyMessage('');
+    setMsg('Perubahan tersimpan di tampilan. Menyinkronkan…');
     setLoading(true);
-    
-    const res = await fetch(candidatesUrl(selectedBatch?.id, 'review'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'UPDATE_EVALUATION', 
-        id: selectedId, 
-        ...form 
-      })
-    });
-    
-    const data = await res.json();
-    setLoading(false);
-    
-    if (data.success) {
-      const updatedCandidate = { ...selectedCandidateData, ...form, status_cv: form.statusCv, mdt_check: form.mdtCheck, notes_investigator: form.notesInvestigator };
-      setSelectedCandidateData(updatedCandidate);
-      setCandidates((current) => current.map((candidate) => candidate.id === selectedId ? { ...candidate, ...updatedCandidate } : candidate));
+    try {
+      const res = await fetch(candidatesUrl(selectedBatch?.id, 'review'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'UPDATE_EVALUATION', id: selectedId, ...form }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Hasil review gagal disimpan.');
       setViewMode(form.statusCv === 'Pending' ? 'PENDING' : form.statusCv === 'Interview' ? 'ACCEPTED' : form.statusCv === 'Rejected' ? 'REJECTED' : 'NEW');
-      setCurrentPage(1);
-      setCopyMessage('');
-      setMsg('');
-      fetchData();
+      setMsg('Hasil review berhasil disimpan.');
       setTimeout(() => setMsg(''), 3000);
+    } catch (issue) {
+      writeClientData(cacheKey, candidates.map((candidate) => candidate.id === selectedId ? candidateBeforeUpdate : candidate));
+      setCandidates((current) => current.map((candidate) => candidate.id === selectedId ? candidateBeforeUpdate : candidate));
+      setSelectedCandidateData(candidateBeforeUpdate || null);
+      setValidationError(issue.message || 'Hasil review gagal disimpan. Perubahan dibatalkan.');
+      setMsg('');
+    } finally {
+      setLoading(false);
     }
   };
 

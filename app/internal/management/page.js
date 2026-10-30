@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { BatchContext } from '../BatchContext';
+import { readClientData, writeClientData } from '@/lib/client-data-cache';
 import { parseWhitelistRoster } from '@/lib/whitelist-parser';
 
 function TablePagination({ page, total, onPageChange }) {
@@ -50,7 +51,8 @@ function RoleFilterHeader({ value, onChange }) {
 }
 
 export default function RecruitmentManagementPage() {
-  const { selectedBatch } = useContext(BatchContext);
+  const { selectedBatch, cacheScope = 'staff' } = useContext(BatchContext);
+  const pendingIdPrefix = useId();
   const selectedBatchId = selectedBatch?.id;
   const [data, setData] = useState({ personnel: [], whitelist: [], candidates: [], groups: [], groupMembers: [], candidateGroups: [] });
   const [selectedGroupId, setSelectedGroupId] = useState('');
@@ -65,6 +67,7 @@ export default function RecruitmentManagementPage() {
   const [genderFilter, setGenderFilter] = useState('ALL');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [trainerSaving, setTrainerSaving] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkDepartment, setBulkDepartment] = useState('');
   const [error, setError] = useState('');
@@ -90,11 +93,17 @@ export default function RecruitmentManagementPage() {
 
   const refresh = useCallback(async () => {
     if (!selectedBatchId) return;
-    setLoading(true);
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const cachedData = readClientData(cacheKey);
+    if (cachedData) {
+      setData(cachedData);
+      setLoading(false);
+    } else setLoading(true);
     try {
       const response = await fetch(`/api/internal/management?batch_id=${encodeURIComponent(selectedBatchId)}`, { cache: 'no-store' });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Data kelompok PIC gagal dimuat.');
+      writeClientData(cacheKey, result);
       setData(result);
       setSelectedGroupId((current) => current && result.groups.some((group) => group.id === current) ? current : (result.groups[0]?.id || ''));
       setTargetGroupId((current) => current && result.groups.some((group) => group.id === current) ? current : (result.groups[0]?.id || ''));
@@ -105,7 +114,7 @@ export default function RecruitmentManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedBatchId]);
+  }, [selectedBatchId, cacheScope]);
 
   useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh]);
   useEffect(() => {
@@ -118,6 +127,7 @@ export default function RecruitmentManagementPage() {
   }, [groupEditorOpen, saving]);
 
   const activePersonnel = useMemo(() => data.personnel.filter((person) => person.is_active), [data.personnel]);
+  const activeTrainers = useMemo(() => activePersonnel.filter((person) => person.is_trainer), [activePersonnel]);
   const pendingWhitelist = useMemo(() => {
     const profiles = new Set(data.personnel.map((person) => person.normalized_name));
     return data.whitelist.filter((item) => item.is_active && !profiles.has(item.normalized_name));
@@ -203,9 +213,28 @@ export default function RecruitmentManagementPage() {
 
   const saveGroup = async () => {
     if (!selectedBatchId) return;
+    const previousData = data;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const cachedPreviousData = readClientData(cacheKey);
+    const optimisticId = editingGroupId || `pending-${Date.now()}`;
+    const optimisticGroup = { id: optimisticId, name: groupName.trim(), batch_id: selectedBatchId };
+    const optimisticData = {
+      ...previousData,
+      groups: editingGroupId
+        ? previousData.groups.map((group) => group.id === editingGroupId ? optimisticGroup : group)
+        : [...previousData.groups, optimisticGroup],
+      groupMembers: [...previousData.groupMembers.filter((member) => member.group_id !== optimisticId && member.group_id !== editingGroupId), ...draftPersonnelIds.map((personnelId) => ({ group_id: optimisticId, personnel_id: personnelId }))],
+    };
+    setData((current) => ({
+      ...optimisticData,
+    }));
+    writeClientData(cacheKey, optimisticData);
+    setSelectedGroupId(optimisticId);
+    setTargetGroupId(optimisticId);
+    setGroupEditorOpen(false);
     setSaving(true);
     setError('');
-    setMessage('');
+    setMessage(`Kelompok “${groupName.trim()}” diperbarui. Menyinkronkan…`);
     try {
       const response = await fetch('/api/internal/management', {
         method: 'POST',
@@ -214,12 +243,22 @@ export default function RecruitmentManagementPage() {
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Kelompok PIC gagal disimpan.');
-      setSelectedGroupId(result.groupId);
-      setTargetGroupId(result.groupId);
-      setGroupEditorOpen(false);
+      if (result.groupId !== optimisticId) {
+        const resolvedData = {
+          ...optimisticData,
+          groups: optimisticData.groups.map((group) => group.id === optimisticId ? { ...group, id: result.groupId } : group),
+          groupMembers: optimisticData.groupMembers.map((member) => member.group_id === optimisticId ? { ...member, group_id: result.groupId } : member),
+        };
+        setData(resolvedData);
+        writeClientData(cacheKey, resolvedData);
+        setSelectedGroupId(result.groupId);
+        setTargetGroupId(result.groupId);
+      }
       setMessage(`Kelompok “${groupName.trim()}” berhasil disimpan.`);
-      await refresh();
     } catch (issue) {
+      setData(previousData);
+      if (cachedPreviousData) writeClientData(cacheKey, cachedPreviousData);
+      setGroupEditorOpen(true);
       setError(issue.message || 'Kelompok PIC gagal disimpan.');
     } finally {
       setSaving(false);
@@ -229,9 +268,23 @@ export default function RecruitmentManagementPage() {
   const deleteGroup = async () => {
     if (!selectedBatchId || !selectedGroup) return;
     if (!window.confirm(`Hapus kelompok “${selectedGroup.name}”? Kandidat di dalamnya akan kembali berstatus Belum Ada PIC.`)) return;
+    const previousData = data;
+    const groupToDelete = selectedGroup;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const cachedPreviousData = readClientData(cacheKey);
+    const optimisticData = {
+      ...data,
+      groups: data.groups.filter((group) => group.id !== groupToDelete.id),
+      groupMembers: data.groupMembers.filter((member) => member.group_id !== groupToDelete.id),
+      candidateGroups: data.candidateGroups.filter((assignment) => assignment.group_id !== groupToDelete.id),
+    };
+    setData(optimisticData);
+    writeClientData(cacheKey, optimisticData);
+    setSelectedGroupId('');
+    setTargetGroupId('');
     setSaving(true);
     setError('');
-    setMessage('');
+    setMessage(`Kelompok “${groupToDelete.name}” dihapus dari tampilan. Menyinkronkan…`);
     try {
       const response = await fetch('/api/internal/management', {
         method: 'POST',
@@ -240,11 +293,12 @@ export default function RecruitmentManagementPage() {
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Kelompok PIC gagal dihapus.');
-      setSelectedGroupId('');
-      setTargetGroupId('');
-      setMessage(`Kelompok “${selectedGroup.name}” dihapus.`);
-      await refresh();
+      setMessage(`Kelompok “${groupToDelete.name}” dihapus.`);
     } catch (issue) {
+      setData(previousData);
+      if (cachedPreviousData) writeClientData(cacheKey, cachedPreviousData);
+      setSelectedGroupId(groupToDelete.id);
+      setTargetGroupId(groupToDelete.id);
       setError(issue.message || 'Kelompok PIC gagal dihapus.');
     } finally {
       setSaving(false);
@@ -258,9 +312,21 @@ export default function RecruitmentManagementPage() {
 
   const assignSelectedCandidates = async () => {
     if (!selectedBatchId || !selectedCandidateIds.length || !bulkDepartment) return;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const department = bulkDepartment === '__UNSET__' ? null : bulkDepartment;
+    const selectedIds = new Set(selectedCandidateIds);
+    const previousCandidates = data.candidates.filter((candidate) => selectedIds.has(String(candidate.id)));
+    const updateAssignments = (items, restore = false) => items.map((candidate) => {
+      if (!selectedIds.has(String(candidate.id))) return candidate;
+      const previous = restore && previousCandidates.find((item) => String(item.id) === String(candidate.id));
+      return previous ? { ...candidate, mapping_dept: previous.mapping_dept } : { ...candidate, mapping_dept: department };
+    });
+    setData((current) => ({ ...current, candidates: updateAssignments(current.candidates) }));
+    const cached = readClientData(cacheKey);
+    if (cached) writeClientData(cacheKey, { ...cached, candidates: updateAssignments(cached.candidates) });
     setBulkSaving(true);
     setError('');
-    setMessage('');
+    setMessage('Penetapan departemen diperbarui. Menyinkronkan…');
     try {
       const response = await fetch('/api/internal/management', {
         method: 'POST',
@@ -269,10 +335,11 @@ export default function RecruitmentManagementPage() {
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Pemindahan kandidat gagal disimpan.');
-      setMessage(`${result.updatedCount || selectedCandidateIds.length} kandidat ditetapkan ke ${bulkDepartment === '__UNSET__' ? 'Belum ditentukan' : bulkDepartment}.`);
+      setMessage(`${result.updatedCount || selectedCandidateIds.length} kandidat ditetapkan ke ${department || 'Belum ditentukan'}.`);
       setSelectedCandidateIds([]);
-      await refresh();
     } catch (issue) {
+      setData((current) => ({ ...current, candidates: updateAssignments(current.candidates, true) }));
+      if (cached) writeClientData(cacheKey, { ...cached, candidates: updateAssignments(cached.candidates, true) });
       setError(issue.message || 'Pemindahan kandidat gagal disimpan.');
     } finally {
       setBulkSaving(false);
@@ -285,13 +352,27 @@ export default function RecruitmentManagementPage() {
       return ['LSPD', 'LSSD', 'DOC'].includes(String(candidate?.dept_preference || '').toUpperCase());
     });
     if (!selectedBatchId || !preferenceIds.length) return;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const selectedIds = new Set(preferenceIds);
+    const previousCandidates = data.candidates.filter((candidate) => selectedIds.has(String(candidate.id)));
+    const updateAssignments = (items, restore = false) => items.map((candidate) => {
+      if (!selectedIds.has(String(candidate.id))) return candidate;
+      if (restore) return { ...candidate, mapping_dept: previousCandidates.find((item) => String(item.id) === String(candidate.id))?.mapping_dept };
+      return { ...candidate, mapping_dept: String(candidate.dept_preference).toUpperCase() };
+    });
+    setData((current) => ({ ...current, candidates: updateAssignments(current.candidates) }));
+    const cached = readClientData(cacheKey);
+    if (cached) writeClientData(cacheKey, { ...cached, candidates: updateAssignments(cached.candidates) });
     setBulkSaving(true); setError(''); setMessage('');
     try {
       const result = await postManagement({ action: 'SET_CANDIDATE_DEPARTMENTS_FROM_PREFERENCE', candidateIds: preferenceIds, batchId: selectedBatchId });
       setMessage(`${result.updatedCount} kandidat ditetapkan sesuai minat yang tercatat; penetapan ini dilakukan oleh admin.`);
       setSelectedCandidateIds((current) => current.filter((id) => !preferenceIds.includes(id)));
-      await refresh();
-    } catch (issue) { setError(issue.message || 'Penetapan sesuai minat gagal disimpan.'); }
+    } catch (issue) {
+      setData((current) => ({ ...current, candidates: updateAssignments(current.candidates, true) }));
+      if (cached) writeClientData(cacheKey, { ...cached, candidates: updateAssignments(cached.candidates, true) });
+      setError(issue.message || 'Penetapan sesuai minat gagal disimpan. Perubahan dibatalkan.');
+    }
     finally { setBulkSaving(false); }
   };
 
@@ -302,40 +383,108 @@ export default function RecruitmentManagementPage() {
     return result;
   };
 
+  const setPersonnelTrainer = async (person, isTrainer) => {
+    const previousData = data;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const nextData = { ...data, personnel: data.personnel.map((item) => item.id === person.id ? { ...item, is_trainer: isTrainer } : item) };
+    setData(nextData);
+    writeClientData(cacheKey, nextData);
+    setTrainerSaving(true);
+    setError('');
+    setMessage('Menyimpan pengaturan Trainer…');
+    try {
+      await postManagement({ action: 'SET_PERSONNEL_TRAINER', personnelId: person.id, isTrainer });
+      setMessage(`${person.full_name} ${isTrainer ? 'ditetapkan sebagai Trainer aktif' : 'dikeluarkan dari daftar Trainer'}.`);
+    } catch (issue) {
+      setData(previousData);
+      const cached = readClientData(cacheKey);
+      if (cached) writeClientData(cacheKey, { ...cached, personnel: cached.personnel.map((item) => item.id === person.id ? { ...item, is_trainer: person.is_trainer } : item) });
+      setError(issue.message || 'Pengaturan Trainer gagal disimpan. Perubahan dibatalkan.');
+      setMessage('');
+    } finally {
+      setTrainerSaving(false);
+    }
+  };
+
   const changeCandidateState = async (candidate, action) => {
     const deleting = action === 'SOFT_DELETE';
     if (!window.confirm(deleting ? `Hapus data kandidat ${candidate.nama}? Data masih dapat dipulihkan.` : `Pulihkan data kandidat ${candidate.nama}?`)) return;
-    setSaving(true); setError(''); setMessage('');
-    try { await postManagement({ action, candidateId: String(candidate.id), batchId: selectedBatchId }); setMessage(deleting ? 'Data kandidat dipindahkan ke Terhapus.' : 'Data kandidat berhasil dipulihkan.'); await refresh(); }
-    catch (issue) { setError(issue.message || 'Perubahan kandidat gagal disimpan.'); }
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const previous = data.candidates.find((item) => String(item.id) === String(candidate.id));
+    const optimistic = { ...previous, deleted_at: deleting ? new Date().toISOString() : null };
+    const applyCandidate = (items, value) => items.map((item) => String(item.id) === String(candidate.id) ? value : item);
+    setData((current) => ({ ...current, candidates: applyCandidate(current.candidates, optimistic) }));
+    const cached = readClientData(cacheKey);
+    if (cached) writeClientData(cacheKey, { ...cached, candidates: applyCandidate(cached.candidates, optimistic) });
+    setSaving(true); setError('');
+    setMessage(deleting ? 'Memindahkan kandidat ke Terhapus…' : 'Memulihkan kandidat…');
+    try { await postManagement({ action, candidateId: String(candidate.id), batchId: selectedBatchId }); setMessage(deleting ? 'Data kandidat dipindahkan ke Terhapus.' : 'Data kandidat berhasil dipulihkan.'); }
+    catch (issue) {
+      setData((current) => ({ ...current, candidates: applyCandidate(current.candidates, previous) }));
+      if (cached) writeClientData(cacheKey, { ...cached, candidates: applyCandidate(cached.candidates, previous) });
+      setError(issue.message || 'Perubahan kandidat gagal disimpan. Perubahan dibatalkan.');
+    }
     finally { setSaving(false); }
   };
 
   const saveCandidate = async (event) => {
     event.preventDefault(); if (!editingCandidate) return;
-    setSaving(true); setError('');
+    const candidateDraft = editingCandidate;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const previous = data.candidates.find((item) => String(item.id) === String(candidateDraft.id));
+    const optimistic = { ...previous, ...candidateDraft, updated_at: new Date().toISOString() };
+    const applyCandidate = (items, value) => items.map((item) => String(item.id) === String(candidateDraft.id) ? value : item);
+    setData((current) => ({ ...current, candidates: applyCandidate(current.candidates, optimistic) }));
+    const cached = readClientData(cacheKey);
+    if (cached) writeClientData(cacheKey, { ...cached, candidates: applyCandidate(cached.candidates, optimistic) });
+    setEditingCandidate(null); setSaving(true); setError(''); setMessage('Perubahan kandidat sedang disinkronkan…');
     try {
-      const response = await fetch('/api/candidates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ADMIN_OVERRIDE_CANDIDATE', id: String(editingCandidate.id), nama: editingCandidate.nama, cid: editingCandidate.cid || '', gender: editingCandidate.gender, linkCv: editingCandidate.link_cv, mappingDept: editingCandidate.mapping_dept || '', statusCv: editingCandidate.status_cv || '', mdtCheck: editingCandidate.mdt_check || '', statusInterview: editingCandidate.status_interview || '', catatan: editingCandidate.catatan || '', notesInvestigator: editingCandidate.notes_investigator || '', notesInterviewer: editingCandidate.notes_interviewer || '' }) });
+      const response = await fetch('/api/candidates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ADMIN_OVERRIDE_CANDIDATE', id: String(candidateDraft.id), nama: candidateDraft.nama, cid: candidateDraft.cid || '', gender: candidateDraft.gender, linkCv: candidateDraft.link_cv, mappingDept: candidateDraft.mapping_dept || '', statusCv: candidateDraft.status_cv || '', mdtCheck: candidateDraft.mdt_check || '', statusInterview: candidateDraft.status_interview || '', catatan: candidateDraft.catatan || '', notesInvestigator: candidateDraft.notes_investigator || '', notesInterviewer: candidateDraft.notes_interviewer || '' }) });
       const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error || 'Perubahan kandidat gagal disimpan.');
-      setEditingCandidate(null); setMessage('Data kandidat berhasil diperbarui.'); await refresh();
-    } catch (issue) { setError(issue.message || 'Perubahan kandidat gagal disimpan.'); }
+      setMessage('Data kandidat berhasil diperbarui.');
+    } catch (issue) {
+      setData((current) => ({ ...current, candidates: applyCandidate(current.candidates, previous) }));
+      if (cached) writeClientData(cacheKey, { ...cached, candidates: applyCandidate(cached.candidates, previous) });
+      setEditingCandidate(candidateDraft);
+      setError(issue.message || 'Perubahan kandidat gagal disimpan. Perubahan dibatalkan.');
+    }
     finally { setSaving(false); }
   };
 
   const savePersonnel = async (event) => {
     event.preventDefault(); if (!editingPersonnel) return;
+    const draft = editingPersonnel;
+    const previousData = data;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const cachedPreviousData = readClientData(cacheKey);
+    const normalizedName = draft.fullName.trim().toLocaleLowerCase('id-ID');
+    const nextData = draft.personnelId
+      ? {
+        ...data,
+        personnel: data.personnel.map((person) => person.id === draft.personnelId ? { ...person, full_name: draft.fullName.trim(), role: draft.role, rank: draft.rank, position: draft.position, department: draft.department } : person),
+        whitelist: data.whitelist.map((item) => item.normalized_name === normalizedName ? { ...item, role: draft.role, is_active: true } : item),
+      }
+      : { ...data, whitelist: [...data.whitelist.filter((item) => item.normalized_name !== normalizedName), { id: `${pendingIdPrefix}-whitelist`, full_name: draft.fullName.trim(), normalized_name: normalizedName, role: draft.role, is_active: true, created_at: null }] };
+    setData(nextData);
+    writeClientData(cacheKey, nextData);
+    setEditingPersonnel(null);
     setSaving(true); setError(''); setMessage('');
     try {
-      if (editingPersonnel.personnelId) {
-        await postManagement({ action: 'SAVE_PERSONNEL', ...editingPersonnel });
+      if (draft.personnelId) {
+        await postManagement({ action: 'SAVE_PERSONNEL', ...draft });
         setMessage('Profil dan akses personel berhasil diperbarui.');
       } else {
-        await postManagement({ action: 'ADD_WHITELIST', fullName: editingPersonnel.fullName, role: editingPersonnel.role });
+        await postManagement({ action: 'ADD_WHITELIST', fullName: draft.fullName, role: draft.role });
         setMessage('Nama berhasil ditambahkan ke whitelist. Staff akan melengkapi profil saat login.');
+        void refresh();
       }
-      setEditingPersonnel(null); await refresh();
     }
-    catch (issue) { setError(issue.message || 'Akses personel gagal disimpan.'); }
+    catch (issue) {
+      setData(previousData);
+      if (cachedPreviousData) writeClientData(cacheKey, cachedPreviousData);
+      setEditingPersonnel(draft);
+      setError(issue.message || 'Akses personel gagal disimpan. Perubahan dibatalkan.');
+    }
     finally { setSaving(false); }
   };
 
@@ -343,11 +492,26 @@ export default function RecruitmentManagementPage() {
     event.preventDefault();
     const entries = bulkWhitelistPreview?.rows.map(({ fullName, role }) => ({ fullName, role })) || [];
     if (!entries.length) { setError('Buat pratinjau dan pastikan ada nama valid sebelum menyimpan.'); return; }
+    const previousData = data;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const cachedPreviousData = readClientData(cacheKey);
+    const whitelistByName = new Map(data.whitelist.map((item) => [item.normalized_name, item]));
+    for (const [index, entry] of entries.entries()) {
+      const normalizedName = entry.fullName.toLocaleLowerCase('id-ID');
+      whitelistByName.set(normalizedName, { ...(whitelistByName.get(normalizedName) || {}), id: whitelistByName.get(normalizedName)?.id || `${pendingIdPrefix}-bulk-${index}`, full_name: entry.fullName, normalized_name: normalizedName, role: entry.role, is_active: true, created_at: whitelistByName.get(normalizedName)?.created_at || null });
+    }
+    const nextData = { ...data, whitelist: [...whitelistByName.values()] };
+    setData(nextData);
+    writeClientData(cacheKey, nextData);
     setSaving(true); setError(''); setMessage('');
     try {
       const result = await postManagement({ action: 'BULK_WHITELIST', entries });
-      setEditingPersonnel(null); setBulkWhitelistText(''); setBulkWhitelistPreview(null); setMessage(`${result.savedCount} nama berhasil ditambahkan atau diperbarui di whitelist.`); await refresh();
-    } catch (issue) { setError(issue.message || 'Input massal gagal disimpan.'); }
+      setEditingPersonnel(null); setBulkWhitelistText(''); setBulkWhitelistPreview(null); setMessage(`${result.savedCount} nama berhasil ditambahkan atau diperbarui di whitelist.`); void refresh();
+    } catch (issue) {
+      setData(previousData);
+      if (cachedPreviousData) writeClientData(cacheKey, cachedPreviousData);
+      setError(issue.message || 'Input massal gagal disimpan. Perubahan dibatalkan.');
+    }
     finally { setSaving(false); }
   };
 
@@ -361,58 +525,126 @@ export default function RecruitmentManagementPage() {
 
   const deletePersonnel = async (person) => {
     if (!window.confirm(`Hapus akses personel ${person.full_name}? Akun akan dinonaktifkan dan dapat ditambahkan kembali.`)) return;
+    const previousData = data;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const cachedPreviousData = readClientData(cacheKey);
+    const nextData = {
+      ...data,
+      personnel: data.personnel.map((item) => item.id === person.id ? { ...item, is_active: false } : item),
+      whitelist: data.whitelist.map((item) => item.normalized_name === person.normalized_name ? { ...item, is_active: false } : item),
+    };
+    setData(nextData);
+    writeClientData(cacheKey, nextData);
     setSaving(true); setError('');
-    try { await postManagement({ action: 'DELETE_PERSONNEL', personnelId: person.id }); setMessage(`Akses ${person.full_name} dinonaktifkan.`); await refresh(); }
-    catch (issue) { setError(issue.message || 'Akses personel gagal dihapus.'); }
+    try { await postManagement({ action: 'DELETE_PERSONNEL', personnelId: person.id }); setMessage(`Akses ${person.full_name} dinonaktifkan.`); }
+    catch (issue) {
+      setData(previousData);
+      if (cachedPreviousData) writeClientData(cacheKey, cachedPreviousData);
+      setError(issue.message || 'Akses personel gagal dihapus. Perubahan dibatalkan.');
+    }
     finally { setSaving(false); }
   };
 
   const saveWhitelistRole = async () => {
     if (!editingWhitelist) return;
+    const draft = editingWhitelist;
+    const previousData = data;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const cachedPreviousData = readClientData(cacheKey);
+    const nextData = { ...data, whitelist: data.whitelist.map((item) => item.id === draft.id ? { ...item, role: draft.role } : item) };
+    setData(nextData);
+    writeClientData(cacheKey, nextData);
+    setEditingWhitelist(null);
     setSaving(true); setError(''); setMessage('');
-    try { await postManagement({ action: 'UPDATE_WHITELIST_ROLE', whitelistId: editingWhitelist.id, role: editingWhitelist.role }); setEditingWhitelist(null); setMessage('Peran whitelist berhasil diperbarui.'); await refresh(); }
-    catch (issue) { setError(issue.message || 'Peran whitelist gagal diperbarui.'); }
+    try { await postManagement({ action: 'UPDATE_WHITELIST_ROLE', whitelistId: draft.id, role: draft.role }); setMessage('Peran whitelist berhasil diperbarui.'); }
+    catch (issue) {
+      setData(previousData);
+      if (cachedPreviousData) writeClientData(cacheKey, cachedPreviousData);
+      setEditingWhitelist(draft);
+      setError(issue.message || 'Peran whitelist gagal diperbarui. Perubahan dibatalkan.');
+    }
     finally { setSaving(false); }
   };
 
   const deleteWhitelist = async (item) => {
     if (!window.confirm(`Cabut whitelist untuk ${item.full_name}? Nama ini tidak dapat login sampai ditambahkan kembali.`)) return;
+    const previousData = data;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const cachedPreviousData = readClientData(cacheKey);
+    const nextData = { ...data, whitelist: data.whitelist.filter((entry) => entry.id !== item.id) };
+    setData(nextData);
+    writeClientData(cacheKey, nextData);
     setSaving(true); setError(''); setMessage('');
-    try { await postManagement({ action: 'DELETE_WHITELIST', whitelistId: item.id }); setMessage(`Whitelist ${item.full_name} berhasil dicabut.`); await refresh(); }
-    catch (issue) { setError(issue.message || 'Whitelist gagal dicabut.'); }
+    try { await postManagement({ action: 'DELETE_WHITELIST', whitelistId: item.id }); setMessage(`Whitelist ${item.full_name} berhasil dicabut.`); }
+    catch (issue) {
+      setData(previousData);
+      if (cachedPreviousData) writeClientData(cacheKey, cachedPreviousData);
+      setError(issue.message || 'Whitelist gagal dicabut. Perubahan dibatalkan.');
+    }
     finally { setSaving(false); }
   };
 
   const saveBlacklist = async (event) => {
     event.preventDefault();
+    const draft = editingBlacklist;
+    const previousData = data;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const cachedPreviousData = readClientData(cacheKey);
+    const optimisticId = draft.id || `${pendingIdPrefix}-blacklist`;
+    const optimisticEntry = { ...draft, id: optimisticId, cid: String(draft.cid || '').toUpperCase(), status: draft.status || 'Blacklist', updated_at: new Date().toISOString() };
+    const nextData = { ...data, blacklist: draft.id
+      ? data.blacklist.map((item) => item.id === draft.id ? optimisticEntry : item)
+      : [...data.blacklist, optimisticEntry].sort((left, right) => left.cid.localeCompare(right.cid)) };
+    setData(nextData);
+    writeClientData(cacheKey, nextData);
+    setEditingBlacklist(null);
     setSaving(true); setError('');
     try {
-      await postManagement({ action: 'SAVE_BLACKLIST', blacklistId: editingBlacklist.id || null, cid: editingBlacklist.cid || '', status: editingBlacklist.status || 'Blacklist', reason: editingBlacklist.reason });
-      setEditingBlacklist(null); setMessage('Catatan status CID berhasil disimpan.'); await refresh();
-    } catch (issue) { setError(issue.message || 'Catatan status CID gagal disimpan.'); }
+      const result = await postManagement({ action: 'SAVE_BLACKLIST', blacklistId: draft.id || null, cid: draft.cid || '', status: draft.status || 'Blacklist', reason: draft.reason });
+      const confirmedData = { ...nextData, blacklist: nextData.blacklist.map((item) => item.id === optimisticId ? { ...item, id: result.blacklistId } : item) };
+      setData(confirmedData);
+      writeClientData(cacheKey, confirmedData);
+      setMessage('Catatan status CID berhasil disimpan.');
+    } catch (issue) {
+      setData(previousData);
+      if (cachedPreviousData) writeClientData(cacheKey, cachedPreviousData);
+      setEditingBlacklist(draft);
+      setError(issue.message || 'Catatan status CID gagal disimpan. Perubahan dibatalkan.');
+    }
     finally { setSaving(false); }
   };
   const deleteBlacklist = async (item) => {
     if (!window.confirm(`Hapus catatan CID ${item.cid} dari daftar status?`)) return;
+    const previousData = data;
+    const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
+    const cachedPreviousData = readClientData(cacheKey);
+    const nextData = { ...data, blacklist: data.blacklist.filter((entry) => entry.id !== item.id) };
+    setData(nextData);
+    writeClientData(cacheKey, nextData);
     setSaving(true); setError('');
-    try { await postManagement({ action: 'DELETE_BLACKLIST', blacklistId: item.id }); setMessage(`Catatan CID ${item.cid} dihapus.`); await refresh(); }
-    catch (issue) { setError(issue.message || 'Data blacklist gagal dihapus.'); }
+    try { await postManagement({ action: 'DELETE_BLACKLIST', blacklistId: item.id }); setMessage(`Catatan CID ${item.cid} dihapus.`); }
+    catch (issue) {
+      setData(previousData);
+      if (cachedPreviousData) writeClientData(cacheKey, cachedPreviousData);
+      setError(issue.message || 'Data blacklist gagal dihapus. Perubahan dibatalkan.');
+    }
     finally { setSaving(false); }
   };
 
   if (!selectedBatch) return <section className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm"><h2 className="text-lg font-bold text-slate-900">Pilih batch terlebih dahulu</h2><p className="mt-2 text-sm text-slate-500">Pengelompokan Academy dikelola per batch.</p></section>;
 
-  return <div className="management-page space-y-5 pb-24">
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+  return <div className="management-page space-y-3 pb-6">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="management-eyebrow text-xs font-bold uppercase tracking-[0.16em] text-[#1E3A2B]">Pengelompokan Academy per Departemen</p><h2 className="mt-1 text-2xl font-bold text-slate-900">{selectedBatch.name}</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Departemen final ditetapkan oleh admin. Minat kandidat hanya menjadi referensi dan tidak mengubah penempatan secara otomatis.</p></div><span className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-[#1E3A2B]">{academyCandidates.length} kandidat · {activePersonnel.length} personel aktif</span></div>
     </section>
-    <section aria-label="Sub-menu manajemen" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section aria-label="Sub-menu manajemen" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
       {[
         ['groups', 'Departemen Academy', `${['LSPD', 'LSSD', 'DOC', ''].filter((department) => academyCandidates.some((candidate) => departmentForCandidate(candidate) === department)).length} departemen`, 'Kelompok otomatis atau manual'],
         ['candidates', 'Data Kandidat', `${data.candidates.length} data`, 'Edit, hapus, dan pulihkan kandidat'],
         ['personnel', 'Akses Staff', `${activePersonnel.length} personel aktif`, 'Kelola identitas, PIN, dan peran'],
+        ['trainers', 'Pengaturan Trainer', `${activeTrainers.length} Trainer aktif`, 'Pilih personel untuk bonus PIC Academy'],
         ['blacklist', 'Catatan Status CID', `${(data.blacklist || []).length} CID`, 'Kelola status dan catatan kandidat berdasarkan CID'],
-      ].map(([key, title, count, description]) => <button key={key} type="button" aria-pressed={activeModule === key} onClick={() => { setActiveModule(key); setError(''); setMessage(''); }} className={`management-module-card rounded-2xl border-2 p-4 text-left shadow-sm transition ${activeModule === key ? 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-100' : 'border-slate-200 bg-white hover:border-emerald-300'}`}><span className="flex items-center justify-between gap-2"><strong className="text-sm font-bold text-slate-900">{title}</strong>{activeModule === key && <span className="rounded-full bg-emerald-700 px-2 py-1 text-[10px] font-bold text-white">Aktif</span>}</span><span className="mt-2 block text-xs font-semibold text-[#1E3A2B]">{count}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span></button>)}
+      ].map(([key, title, count, description]) => <button key={key} type="button" aria-pressed={activeModule === key} onClick={() => { setActiveModule(key); setError(''); setMessage(''); }} className={`management-module-card rounded-xl border p-3 text-left shadow-sm transition ${activeModule === key ? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-100' : 'border-slate-200 bg-white hover:border-emerald-300'}`}><span className="flex items-center justify-between gap-2"><strong className="text-xs font-bold text-slate-900">{title}</strong>{activeModule === key && <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[9px] font-bold text-white">Aktif</span>}</span><span className="mt-1.5 block text-[11px] font-semibold text-[#1E3A2B]">{count}</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{description}</span></button>)}
     </section>
     {(error || message) && <div role={error ? 'alert' : 'status'} className={`rounded-xl border px-4 py-3 text-sm ${error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{error || message}</div>}
 
@@ -443,8 +675,13 @@ export default function RecruitmentManagementPage() {
     {activeModule === 'personnel' && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4"><div><h3 className="text-lg font-bold text-slate-900">Akses Staff</h3><p className="mt-1 text-xs text-slate-500">Personel terverifikasi. PIN dibagikan berdasarkan peran (Staff/Admin), bukan PIN pribadi.</p></div><button type="button" onClick={() => { setEditingPersonnel({ personnelId: null, fullName: '', role: 'STAFF' }); setPersonnelModalTab('single'); setBulkWhitelistText(''); setBulkWhitelistPreview(null); setBulkDefaultRole('STAFF'); setError(''); }} className="rounded-lg bg-[#1E3A2B] px-3 py-2.5 text-xs font-bold text-white hover:bg-[#294d39]">+ Tambah Whitelist Staff</button></header>
       <div className="border-b border-slate-100 p-4"><label className="block max-w-sm"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari nama atau departemen</span><input type="search" value={personnelSearch} onChange={(event) => { setPersonnelSearch(event.target.value); setPersonnelPage(1); }} placeholder="Nama / LSPD / LSSD…" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>
-      {loading ? <p className="p-10 text-center text-sm text-slate-500">Memuat daftar personel…</p> : searchedPersonnel.length ? <><div className="overflow-x-auto"><table className="w-full min-w-[800px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Nama</th><th className="px-4 py-3">Pangkat / Posisi</th><th className="px-4 py-3">Departemen</th><th className="relative w-[120px] min-w-[120px] max-w-[120px] whitespace-nowrap px-4 py-3"><RoleFilterHeader value={personnelRoleFilter} onChange={(role) => { setPersonnelRoleFilter(role); setPersonnelPage(1); }} /></th><th className="px-4 py-3">Akses</th><th className="px-4 py-3">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{visiblePersonnelPage.map((person) => <tr key={person.id} className={!person.is_active ? 'bg-slate-50 text-slate-400' : ''}><td className="px-4 py-3 font-semibold">{person.full_name}</td><td className="px-4 py-3">{person.rank || '—'}{person.position ? ` · ${person.position}` : ''}</td><td className="px-4 py-3">{person.department || '—'}</td><td className="px-4 py-3">{person.role === 'ADMIN' ? 'Admin' : 'Staff'}</td><td className="px-4 py-3">{person.is_active ? 'Aktif' : 'Dinonaktifkan'}</td><td className="px-4 py-3"><div className="flex gap-2"><button type="button" onClick={() => setEditingPersonnel({ personnelId: person.id, fullName: person.full_name, role: person.role, rank: person.rank || '', position: person.position || '', department: person.department || 'LSPD' })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Edit</button>{person.is_active && <button type="button" disabled={saving} onClick={() => deletePersonnel(person)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Hapus akses</button>}</div></td></tr>)}</tbody></table></div><TablePagination page={currentPersonnelPage} total={searchedPersonnel.length} onPageChange={setPersonnelPage} /></> : <p className="p-10 text-center text-sm text-slate-500">{personnelSearch ? 'Tidak ada personel yang cocok dengan pencarian.' : 'Belum ada personel terdaftar.'}</p>}
-      {pendingWhitelist.length > 0 && <div className="border-t border-slate-100 p-4"><div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><h4 className="text-sm font-bold text-slate-800">Whitelist menunggu login · {pendingWhitelist.length}</h4><p className="mt-1 text-xs text-slate-500">Profil pangkat, posisi, dan departemen diisi staff saat login pertama.</p></div><label className="block w-full max-w-sm"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari nama whitelist</span><input type="search" value={whitelistSearch} onChange={(event) => { setWhitelistSearch(event.target.value); setWhitelistPage(1); }} placeholder="Ketik nama…" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>{searchedWhitelist.length ? <><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Nama lengkap</th><th className="relative w-[120px] min-w-[120px] max-w-[120px] whitespace-nowrap px-3 py-2"><RoleFilterHeader value={whitelistRoleFilter} onChange={(role) => { setWhitelistRoleFilter(role); setWhitelistPage(1); }} /></th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{visibleWhitelistPage.map((item) => <tr key={item.id}><td className="px-3 py-2 font-medium text-slate-700">{item.full_name}</td><td className="px-3 py-2">{editingWhitelist?.id === item.id ? <select aria-label={`Peran untuk ${item.full_name}`} value={editingWhitelist.role} onChange={(event) => setEditingWhitelist({ ...editingWhitelist, role: event.target.value })} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select> : item.role === 'ADMIN' ? 'Admin' : 'Staff'}</td><td className="px-3 py-2 text-amber-700">Menunggu login</td><td className="px-3 py-2"><div className="flex flex-wrap gap-2">{editingWhitelist?.id === item.id ? <><button type="button" disabled={saving} onClick={saveWhitelistRole} className="rounded-lg bg-[#1E3A2B] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">Simpan</button><button type="button" disabled={saving} onClick={() => setEditingWhitelist(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-50">Batal</button></> : <><button type="button" onClick={() => setEditingWhitelist({ id: item.id, role: item.role })} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button><button type="button" disabled={saving} onClick={() => deleteWhitelist(item)} className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Hapus</button></>}</div></td></tr>)}</tbody></table></div><TablePagination page={currentWhitelistPage} total={searchedWhitelist.length} onPageChange={setWhitelistPage} /></> : <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Tidak ada nama whitelist yang cocok dengan pencarian.</p>}</div>}
+      {loading ? <p className="p-10 text-center text-sm text-slate-500">Memuat daftar personel…</p> : searchedPersonnel.length ? <><div className="management-personnel-scroll max-h-[55vh] overflow-auto"><table className="management-personnel-table w-full min-w-[800px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Nama</th><th className="px-4 py-3">Pangkat / Posisi</th><th className="px-4 py-3">Departemen</th><th className="relative w-[120px] min-w-[120px] max-w-[120px] whitespace-nowrap px-4 py-3"><RoleFilterHeader value={personnelRoleFilter} onChange={(role) => { setPersonnelRoleFilter(role); setPersonnelPage(1); }} /></th><th className="px-4 py-3">Akses</th><th className="px-4 py-3">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{visiblePersonnelPage.map((person) => <tr key={person.id} className={!person.is_active ? 'bg-slate-50 text-slate-400' : ''}><td className="px-4 py-3 font-semibold">{person.full_name}</td><td className="px-4 py-3">{person.rank || '—'}{person.position ? ` · ${person.position}` : ''}</td><td className="px-4 py-3">{person.department || '—'}</td><td className="px-4 py-3">{person.role === 'ADMIN' ? 'Admin' : 'Staff'}</td><td className="px-4 py-3">{person.is_active ? 'Aktif' : 'Dinonaktifkan'}</td><td className="px-4 py-3"><div className="flex gap-2"><button type="button" onClick={() => setEditingPersonnel({ personnelId: person.id, fullName: person.full_name, role: person.role, rank: person.rank || '', position: person.position || '', department: person.department || 'LSPD' })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Edit</button>{person.is_active && <button type="button" disabled={saving} onClick={() => deletePersonnel(person)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Hapus akses</button>}</div></td></tr>)}</tbody></table></div><TablePagination page={currentPersonnelPage} total={searchedPersonnel.length} onPageChange={setPersonnelPage} /></> : <p className="p-10 text-center text-sm text-slate-500">{personnelSearch ? 'Tidak ada personel yang cocok dengan pencarian.' : 'Belum ada personel terdaftar.'}</p>}
+      {pendingWhitelist.length > 0 && <details className="mt-2 rounded-xl border border-slate-100"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-800">Whitelist menunggu login · {pendingWhitelist.length}</summary><div className="border-t border-slate-100 p-4"><div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><h4 className="text-sm font-bold text-slate-800">Daftar whitelist</h4><p className="mt-1 text-xs text-slate-500">Profil pangkat, posisi, dan departemen diisi staff saat login pertama.</p></div><label className="block w-full max-w-sm"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari nama whitelist</span><input type="search" value={whitelistSearch} onChange={(event) => { setWhitelistSearch(event.target.value); setWhitelistPage(1); }} placeholder="Ketik nama…" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>{searchedWhitelist.length ? <><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Nama lengkap</th><th className="relative w-[120px] min-w-[120px] max-w-[120px] whitespace-nowrap px-3 py-2"><RoleFilterHeader value={whitelistRoleFilter} onChange={(role) => { setWhitelistRoleFilter(role); setWhitelistPage(1); }} /></th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{visibleWhitelistPage.map((item) => <tr key={item.id}><td className="px-3 py-2 font-medium text-slate-700">{item.full_name}</td><td className="px-3 py-2">{editingWhitelist?.id === item.id ? <select aria-label={`Peran untuk ${item.full_name}`} value={editingWhitelist.role} onChange={(event) => setEditingWhitelist({ ...editingWhitelist, role: event.target.value })} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select> : item.role === 'ADMIN' ? 'Admin' : 'Staff'}</td><td className="px-3 py-2 text-amber-700">Menunggu login</td><td className="px-3 py-2"><div className="flex flex-wrap gap-2">{editingWhitelist?.id === item.id ? <><button type="button" disabled={saving} onClick={saveWhitelistRole} className="rounded-lg bg-[#1E3A2B] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">Simpan</button><button type="button" disabled={saving} onClick={() => setEditingWhitelist(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-50">Batal</button></> : <><button type="button" onClick={() => setEditingWhitelist({ id: item.id, role: item.role })} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button><button type="button" disabled={saving} onClick={() => deleteWhitelist(item)} className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Hapus</button></>}</div></td></tr>)}</tbody></table></div><TablePagination page={currentWhitelistPage} total={searchedWhitelist.length} onPageChange={setWhitelistPage} /></> : <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Tidak ada nama whitelist yang cocok dengan pencarian.</p>}</div></details>}
+    </section>}
+
+    {activeModule === 'trainers' && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <header className="border-b border-slate-100 p-4 sm:p-5"><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Pengaturan bonus Academy</p><h3 className="mt-1 text-lg font-bold text-slate-900">Trainer aktif · {activeTrainers.length}</h3><p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">Pilih personel aktif yang menjadi Trainer/PIC Academy. Hanya personel yang dipilih di sini yang masuk rekap bonus Trainer; penugasannya tetap dihitung dari assignment PIC pada batch.</p></header>
+      {loading ? <p className="p-10 text-center text-sm text-slate-500">Memuat daftar personel…</p> : activePersonnel.length ? <div className="management-trainer-scroll max-h-[55vh] overflow-auto"><table className="management-trainer-table w-full min-w-[600px] text-left text-sm"><thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Nama personel</th><th className="px-4 py-3">Departemen</th><th className="px-4 py-3">Peran</th><th className="px-4 py-3 text-center">Trainer bonus aktif</th></tr></thead><tbody className="divide-y divide-slate-100">{activePersonnel.map((person) => <tr key={person.id} className="hover:bg-slate-50/70"><td className="px-4 py-3 font-semibold text-slate-800">{person.full_name}</td><td className="px-4 py-3 text-slate-600">{person.department || '—'}</td><td className="px-4 py-3 text-slate-600">{person.role === 'ADMIN' ? 'Admin RNT' : 'Staff'}</td><td className="px-4 py-3 text-center"><label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100"><input type="checkbox" checked={Boolean(person.is_trainer)} disabled={trainerSaving} onChange={(event) => setPersonnelTrainer(person, event.target.checked)} className="h-4 w-4 accent-emerald-700" aria-label={`${person.is_trainer ? 'Nonaktifkan' : 'Aktifkan'} ${person.full_name} sebagai Trainer`} />{person.is_trainer ? 'Aktif' : 'Tidak aktif'}</label></td></tr>)}</tbody></table></div> : <p className="p-8 text-center text-sm text-slate-500">Belum ada personel aktif untuk dipilih sebagai Trainer.</p>}
     </section>}
 
     {activeModule === 'blacklist' && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
