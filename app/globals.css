@@ -670,7 +670,11 @@ html[data-theme="dark"] .staff-topbar .staff-live { color: #aab9ad !important; }
 .staff-login-card :where(label, legend) { margin-bottom: 6px; }
 .candidate-footer { color: #68776d; letter-spacing: .6px; }
 .candidate-brand small { color: #68776d; }
-.candidate-kicker { color: #ddd; letter-spacing: 1px; }
+.candidate-kicker { display: block; margin-bottom: 5px; color: #254532; font-size: 11px !important; line-height: 1.35; letter-spacing: 1px; }
+.candidate-form-heading h1 { margin-top: 0; }
+html[data-theme="dark"] .candidate-kicker { color: #e4ece5 !important; }
+html[data-theme="dark"] .candidate-brand { color: #e4ece5 !important; }
+html[data-theme="dark"] .candidate-brand small { color: #b8c9be !important; }
 @media (max-width: 560px) {
   .pin-generator-page { padding: 20px 14px; }
   .pin-generator-page > div > section { padding: 22px 18px; }

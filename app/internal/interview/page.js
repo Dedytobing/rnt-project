@@ -6,10 +6,12 @@ import Pagination, { PAGE_SIZE } from '../components/Pagination';
 import { BatchContext, candidatesUrl } from '../BatchContext';
 import { readClientData, writeClientData } from '@/lib/client-data-cache';
 import { DECLINED_REASON_OPTIONS, createDeclinedBbcode } from '@/lib/interview-declined-template';
+import { candidateSalutation } from '@/lib/candidate-salutation';
+import { INTERVIEW_LOCATIONS } from '@/lib/interview-locations';
 
-const LOGO_LSSD = '/logos/lssd.png';
-const LOGO_LSPD = '/logos/lspd.png';
-const LOGO_DOC = '/logos/doc.png';
+const LOGO_LSSD = '/logos/lssd.svg';
+const LOGO_LSPD = '/logos/lspd.svg';
+const LOGO_DOC = '/logos/doc.svg';
 function formatAcademySchedule(batch) {
   const start = new Date(batch?.academy_start || '');
   const end = new Date(batch?.academy_end || '');
@@ -25,7 +27,8 @@ function formatAcademySchedule(batch) {
   };
 }
 
-function createAcademyBbcode(candidate, staffProfile, batch) {
+function createAcademyBbcode(candidate, staffProfile, batch, interviewLocation) {
+  const salutation = candidateSalutation(candidate);
   const departmentNames = {
     LSSD: "Los Santos Sheriff's Department",
     LSPD: 'Los Santos Police Department',
@@ -43,11 +46,11 @@ function createAcademyBbcode(candidate, staffProfile, batch) {
   const schedule = formatAcademySchedule(batch);
 
   return `[divbox=white]
-[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.png[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.png[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
+[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.svg[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.svg[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
 [center][size=200][b]LAW ENFORCEMENT OFFICER[/b][/size][/center]
 [center][size=100][b]Recruitment and Training Divison[/b][/size][/center]
 [divbox=darkblue][/divbox]
-Dear Mrs. ${candidate.nama},
+Dear ${salutation} ${candidate.nama},
 
 We are pleased to inform you that you have successfully [b][color=#408000]PASSED[/color][/b] the interview stage of the Law Enforcement Officer recruitment process. Your performance and responses during the interview demonstrated the qualities we seek in a future officer.
 
@@ -57,7 +60,7 @@ Please take note of the following details regarding the Academy:
 
 📅 Date: ${schedule.date}
 ⏰ Time: ${schedule.time}
-📍 Location: Alta HQ
+📍 Location: ${interviewLocation}
 
 Your attendance is mandatory, and punctuality is expected. Please arrive in appropriate attire (business casual or department-approved clothing) and be prepared for your initial orientation and training.
 
@@ -93,6 +96,7 @@ export default function InterviewPage() {
   const [validationError, setValidationError] = useState('');
   const [stageAccessError, setStageAccessError] = useState('');
   const [academyMessage, setAcademyMessage] = useState('');
+  const [interviewLocation, setInterviewLocation] = useState(INTERVIEW_LOCATIONS[0].label);
   const [declinedReason, setDeclinedReason] = useState('');
   const [staffProfile, setStaffProfile] = useState({ name: '', rank: '', position: '', department: '' });
   const academyPreviewRef = useRef(null);
@@ -146,6 +150,7 @@ export default function InterviewPage() {
     setSelectedCandidateData(cand);
     setAcademyMessage('');
     setDeclinedReason('');
+    setInterviewLocation(INTERVIEW_LOCATIONS[0].label);
     setForm({
       deptPreference: cand.dept_preference || '',
       interviewerName: cand.interviewer_name || '',
@@ -212,7 +217,7 @@ export default function InterviewPage() {
   const academyPassed = Boolean(selectedCand?.status_interview === 'Passed' && form.statusInterview === 'Passed');
   const academyStaffReady = Boolean(staffProfile.name.trim());
   const academyBbcode = selectedCand && academyPassed
-    ? createAcademyBbcode(selectedCand, staffProfile, selectedBatch)
+    ? createAcademyBbcode(selectedCand, staffProfile, selectedBatch, interviewLocation)
     : '';
   const declinedBbcode = selectedCand && form.statusInterview === 'Failed' && declinedReason
     ? createDeclinedBbcode(selectedCand, declinedReason, staffProfile)
@@ -476,6 +481,16 @@ export default function InterviewPage() {
                 </div>
 
                 {academyPassed ? <>
+                  <label htmlFor="interview-location" className="mb-2 block text-xs font-bold text-slate-700 dark:text-slate-200">Lokasi Interview
+                    <select
+                      id="interview-location"
+                      value={interviewLocation}
+                      onChange={(event) => { setInterviewLocation(event.target.value); setAcademyMessage(''); }}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm font-normal text-slate-900 shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      {INTERVIEW_LOCATIONS.map((location) => <option key={location.value} value={location.label}>{location.label}</option>)}
+                    </select>
+                  </label>
                   <div className="academy-details-grid academy-schedule-grid">
                     <div className="academy-schedule-item"><span>Tanggal</span><strong>{academySchedule.date}</strong></div>
                     <div className="academy-schedule-item"><span>Waktu · WIB</span><strong>{academySchedule.time}</strong></div>

@@ -62,3 +62,4 @@ next-env.d.ts
 !/supabase/migrations/20261028010000_portal_query_indexes.sql
 !/supabase/migrations/20261030000000_personnel_bonus_payments.sql
 !/supabase/migrations/20261031020000_bonus_whitelist_identity.sql
+!/supabase/migrations/20261102010000_batch_scoped_academy_trainers.sql

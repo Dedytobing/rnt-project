@@ -5,6 +5,8 @@ import Pagination, { PAGE_SIZE } from '../components/Pagination';
 import { BatchContext, candidatesUrl } from '../BatchContext';
 import { readClientData, writeClientData } from '@/lib/client-data-cache';
 import { DECLINED_REASON_OPTIONS, createDeclinedBbcode } from '@/lib/interview-declined-template';
+import { candidateSalutation } from '@/lib/candidate-salutation';
+import { INTERVIEW_LOCATIONS } from '@/lib/interview-locations';
 
 const PENDING_REASON_OPTIONS = [
   {
@@ -63,7 +65,7 @@ function createPendingBbcode(candidate, reasons, customReason, staffProfile) {
     ...reasons.map((reasonId) => PENDING_REASON_OPTIONS.find((reason) => reason.id === reasonId)?.label).filter(Boolean),
     ...customReason.split('\n').map((reason) => reason.trim()).filter(Boolean),
   ];
-  const salutation = candidate.gender === 'Female' ? 'Ms.' : 'Mr.';
+  const salutation = candidateSalutation(candidate);
   const reasonList = selectedReasons.map((reason) => `[*] ${reason}`).join('\n');
   const departmentNames = {
     LSSD: "Los Santos Sheriff's Department",
@@ -79,7 +81,7 @@ function createPendingBbcode(candidate, reasons, customReason, staffProfile) {
   ].filter(Boolean).join('\n');
 
   return `[divbox=white]
-[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.png[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.png[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
+[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.svg[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.svg[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
 [center][size=200][b]LAW ENFORCEMENT OFFICER[/b][/size][/center]
 [center][size=100][b]Recruitment and Training Division[/b][/size][/center]
 [divbox=darkblue][/divbox]
@@ -103,7 +105,7 @@ ${signature || 'Recruitment Staff'}[/right]
 }
 
 function createStandardRejectedBbcode(candidate, staffProfile, rejectionReason = '') {
-  const salutation = candidate.gender === 'Female' ? 'Mrs.' : 'Mr.';
+  const salutation = candidateSalutation(candidate);
   const departmentNames = {
     LSSD: "Los Santos Sheriff's Department",
     LSPD: 'Los Santos Police Department',
@@ -114,7 +116,7 @@ function createStandardRejectedBbcode(candidate, staffProfile, rejectionReason =
   const staffTitle = [staffProfile.rank, staffProfile.position].filter(Boolean).join(' · ') || 'Recruitment Staff';
 
   return `[divbox=white]
-[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.png[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.png[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
+[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.svg[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.svg[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
 [center][size=200][b]LAW ENFORCEMENT OFFICER[/b][/size][/center]
 [center][size=100][b]Recruitment and Training Divison[/b][/size][/center]
 [divbox=darkblue][/divbox]
@@ -136,8 +138,8 @@ ${departmentName}[/right]
 [/divbox]`;
 }
 
-function createAcceptedBbcode(candidate, staffProfile, interviewSchedule) {
-  const salutation = candidate.gender === 'Female' ? 'Ms.' : 'Mr.';
+function createAcceptedBbcode(candidate, staffProfile, interviewSchedule, interviewLocation) {
+  const salutation = candidateSalutation(candidate);
   const departmentNames = {
     LSSD: "Los Santos Sheriff's Department",
     LSPD: 'Los Santos Police Department',
@@ -152,7 +154,7 @@ function createAcceptedBbcode(candidate, staffProfile, interviewSchedule) {
   ].filter(Boolean).join('\n');
 
   return `[divbox=white]
-[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.png[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.png[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
+[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.svg[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.svg[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
 [center][size=200][b]LAW ENFORCEMENT OFFICER[/b][/size][/center]
 [center][size=100][b]Recruitment and Training Division[/b][/size][/center]
 [divbox=darkblue][/divbox]
@@ -166,7 +168,7 @@ Please find the details of your scheduled interview below:
 
 📅 Date: ${interviewSchedule.date}
 ⏰ Time: ${interviewSchedule.time}
-📍 Location: ALTA POLICE STATION
+📍 Location: ${interviewLocation}
 
 You are expected to arrive on time and be properly dressed in [b]professional or semi-formal attire[/b]. Failure to attend the interview or to arrive on time without prior notice may result in the termination of your application.
 
@@ -185,6 +187,7 @@ export default function ReviewPage() {
   const [viewMode, setViewMode] = useState('NEW'); // 'NEW', 'PENDING', atau 'ACCEPTED'
   const [selectedId, setSelectedId] = useState('');
   const [selectedCandidateData, setSelectedCandidateData] = useState(null);
+  const [interviewLocationByCandidate, setInterviewLocationByCandidate] = useState({});
   const [candidateHistory, setCandidateHistory] = useState(null);
   const [candidateHistoryError, setCandidateHistoryError] = useState(null);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
@@ -387,8 +390,9 @@ export default function ReviewPage() {
       : createStandardRejectedBbcode(selectedCand, staffProfile, rejectionReasonText)
     : '';
   const interviewSchedule = formatInterviewSchedule(selectedBatch);
+  const interviewLocation = selectedCand ? interviewLocationByCandidate[selectedCand.id] || INTERVIEW_LOCATIONS[0].label : INTERVIEW_LOCATIONS[0].label;
   const acceptedBbcode = selectedCand && form.statusCv === 'Interview'
-    ? createAcceptedBbcode(selectedCand, staffProfile, interviewSchedule)
+    ? createAcceptedBbcode(selectedCand, staffProfile, interviewSchedule, interviewLocation)
     : '';
   const hasPendingReasons = selectedPendingReasons.length > 0 || selectedCustomPendingReason.split('\n').some((reason) => reason.trim());
 
@@ -748,7 +752,7 @@ export default function ReviewPage() {
                 {form.statusCv === 'Interview' && <div className="accepted-interview-details" aria-live="polite">
                   <div><span>Tanggal wawancara</span><strong>{interviewSchedule.date}</strong></div>
                   <div><span>Waktu wawancara (WIB)</span><strong>{interviewSchedule.time}</strong></div>
-                  <div className="accepted-interview-location"><span>Lokasi wawancara</span><strong>ALTA POLICE STATION</strong></div>
+                  <div className="accepted-interview-location"><span id="accepted-interview-location-label">Lokasi wawancara</span><select aria-labelledby="accepted-interview-location-label" value={interviewLocation} onChange={(event) => { if (selectedCand) setInterviewLocationByCandidate((current) => ({ ...current, [selectedCand.id]: event.target.value })); setCopyMessage(''); }} className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">{INTERVIEW_LOCATIONS.map((location) => <option key={location.value} value={location.label}>{location.label}</option>)}</select></div>
                 </div>}
 
                 <label className="pending-bbcode-label" htmlFor="review-bbcode-preview">Pratinjau BBCode</label>

@@ -13,11 +13,17 @@ const departmentAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('SET_CANDIDATE_DEPARTMENTS_BULK'), candidateIds: z.array(z.string().min(1).max(100)).min(1).max(500), batchId: z.uuid(), department: z.enum(['', 'LSPD', 'LSSD', 'DOC']) }).strict(),
   z.object({ action: z.literal('SET_CANDIDATE_DEPARTMENTS_FROM_PREFERENCE'), candidateIds: z.array(z.string().min(1).max(100)).min(1).max(500), batchId: z.uuid() }).strict(),
 ]);
+const batchTrainerAction = z.object({
+  action: z.literal('SET_BATCH_TRAINERS'),
+  batchId: z.uuid(),
+  whitelistIds: z.array(z.uuid()).max(1000),
+}).strict().refine((value) => new Set(value.whitelistIds).size === value.whitelistIds.length, {
+  message: 'Daftar Trainer batch berisi pilihan duplikat.',
+});
 const personnelAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('SAVE_BLACKLIST'), blacklistId: z.uuid().nullable().optional(), cid: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9]+$/).transform((value) => value.toUpperCase()), status: z.enum(['Recommended', 'Yellowlist', 'Blacklist']), reason: z.string().trim().min(2).max(2000) }).strict(),
   z.object({ action: z.literal('DELETE_BLACKLIST'), blacklistId: z.uuid() }).strict(),
   z.object({ action: z.literal('SAVE_PERSONNEL'), personnelId: z.uuid(), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']), rank: z.string().trim().min(2).max(60), position: z.string().trim().max(100), department: z.enum(['LSPD', 'LSSD', 'SASP']) }).strict(),
-  z.object({ action: z.literal('SET_PERSONNEL_TRAINER'), personnelId: z.uuid(), isTrainer: z.boolean() }).strict(),
   z.object({ action: z.literal('DELETE_PERSONNEL'), personnelId: z.uuid() }).strict(),
   z.object({ action: z.literal('ADD_WHITELIST'), fullName: z.string().trim().min(2).max(80), role: z.enum(['STAFF', 'ADMIN']) }).strict(),
   z.object({ action: z.literal('BULK_WHITELIST'), entries: z.array(z.object({ fullName: z.string().trim().min(2).max(120), role: z.enum(['STAFF', 'ADMIN']) }).strict()).min(1).max(1000) }).strict(),
@@ -50,12 +56,17 @@ export async function GET(request) {
       .eq('id', batchId.data).is('deleted_at', null).maybeSingle();
     if (batchError) throw batchError;
     if (!batch) return NextResponse.json({ success: false, error: 'Batch tidak ditemukan atau sudah dihapus.' }, { status: 404 });
-    const [personnel, whitelist, candidates, blacklist] = await Promise.all([
-      db.from('rnt_personnel').select('id,full_name,normalized_name,role,rank,position,department,is_active,is_trainer').order('full_name'),
+    const [personnel, whitelist, candidates, blacklist, batchTrainers] = await Promise.all([
+      db.from('rnt_personnel').select('id,full_name,normalized_name,role,rank,position,department,is_active').order('full_name'),
       db.from('rnt_personnel_name_whitelist').select('id,full_name,normalized_name,role,is_active,created_at').order('full_name'),
       db.from('candidates').select('id,nama,cid,gender,link_cv,batch_id,deleted_at,deleted_by,status_cv,status_interview,mdt_check,catatan,notes_investigator,notes_interviewer,created_at,mapping_dept,dept_preference').eq('batch_id', batchId.data).order('created_at', { ascending: false }),
       db.from('candidate_blacklist').select('id,cid,status,reason,created_at,updated_at').order('cid'),
+      db.from('academy_batch_trainers').select('whitelist_id').eq('batch_id', batchId.data),
     ]);
+    if (batchTrainers.error) {
+      console.error('Batch trainer selection query failed:', batchTrainers.error);
+      return NextResponse.json({ success: false, error: 'Pengaturan Trainer per batch belum tersedia. Terapkan migrasi 20261102010000_batch_scoped_academy_trainers.sql.' }, { status: 503 });
+    }
     const failed = [personnel, whitelist, candidates, blacklist].find((result) => result.error);
     if (failed) throw failed.error;
     return NextResponse.json({
@@ -65,6 +76,7 @@ export async function GET(request) {
       whitelist: whitelist.data || [],
       candidates: candidates.data || [],
       blacklist: blacklist.data || [],
+      batchTrainerWhitelistIds: (batchTrainers.data || []).map((row) => row.whitelist_id).filter((id) => (whitelist.data || []).some((person) => person.id === id && person.is_active)),
       groups: [],
       groupMembers: [],
       candidateGroups: [],
@@ -83,11 +95,45 @@ export async function POST(request) {
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ success: false, error: 'Format permintaan tidak valid.' }, { status: 400 }); }
   if (session.role !== 'ADMIN') return NextResponse.json({ success: false, error: 'Aksi ini hanya dapat dilakukan Admin RNT.' }, { status: 403 });
-  const parsed = [candidateAction, departmentAction, personnelAction].map((schema) => schema.safeParse(body)).find((result) => result.success);
+  const parsed = [candidateAction, departmentAction, batchTrainerAction, personnelAction].map((schema) => schema.safeParse(body)).find((result) => result.success);
   if (!parsed) return NextResponse.json({ success: false, error: 'Format atau nilai permintaan tidak valid.' }, { status: 400 });
   const action = parsed.data;
   const db = createInternalDataClient(session);
   try {
+    if (action.action === 'SET_BATCH_TRAINERS') {
+      const { data: batch, error: batchError } = await db.from('recruitment_batches')
+        .select('id,name').eq('id', action.batchId).is('deleted_at', null).maybeSingle();
+      if (batchError) throw batchError;
+      if (!batch) return NextResponse.json({ success: false, error: 'Batch tidak ditemukan.' }, { status: 404 });
+
+      const selectedIds = action.whitelistIds;
+      let selectedPeople = [];
+      if (selectedIds.length) {
+        const { data, error } = await db.from('rnt_personnel_name_whitelist')
+          .select('id,full_name').in('id', selectedIds).eq('is_active', true);
+        if (error) throw error;
+        if (data.length !== selectedIds.length) return NextResponse.json({ success: false, error: 'Pilih hanya nama whitelist yang masih aktif.' }, { status: 400 });
+        selectedPeople = data;
+        const { error: upsertError } = await db.from('academy_batch_trainers').upsert(
+          selectedIds.map((whitelistId) => ({ batch_id: batch.id, whitelist_id: whitelistId, updated_by: session.name, updated_at: new Date().toISOString() })),
+          { onConflict: 'batch_id,whitelist_id' },
+        );
+        if (upsertError) throw upsertError;
+      }
+
+      const { data: currentRows, error: currentError } = await db.from('academy_batch_trainers')
+        .select('whitelist_id').eq('batch_id', batch.id);
+      if (currentError) throw currentError;
+      const obsoleteIds = (currentRows || []).map((row) => row.whitelist_id).filter((id) => !selectedIds.includes(id));
+      if (obsoleteIds.length) {
+        const { error } = await db.from('academy_batch_trainers').delete().eq('batch_id', batch.id).in('whitelist_id', obsoleteIds);
+        if (error) throw error;
+      }
+      const names = selectedPeople.map((person) => person.full_name);
+      await recordPersonnelActivity(db, session, 'BATCH_TRAINERS_UPDATED', batch.name, `Memperbarui Trainer batch ${batch.name}: ${names.length ? names.join(', ') : 'tidak ada Trainer dipilih'}.`);
+      return NextResponse.json({ success: true, whitelistIds: selectedIds });
+    }
+
     if (action.action === 'SAVE_BLACKLIST') {
       let query = action.blacklistId
         ? db.from('candidate_blacklist').update({ cid: action.cid, status: action.status, reason: action.reason.trim(), updated_at: new Date().toISOString() }).eq('id', action.blacklistId)
@@ -185,17 +231,6 @@ export async function POST(request) {
         : `Menambahkan personel ${action.fullName} dengan akses ${action.role === 'ADMIN' ? 'Admin' : 'Staff'} di departemen ${action.department}.`;
       await recordPersonnelActivity(db, session, previousPerson ? 'PERSONNEL_UPDATED' : 'PERSONNEL_ADDED', action.fullName, details);
       return NextResponse.json({ success: true, personnelId: personnel.id });
-    }
-    if (action.action === 'SET_PERSONNEL_TRAINER') {
-      const { data, error } = await db.from('rnt_personnel')
-        .update({ is_trainer: action.isTrainer })
-        .eq('id', action.personnelId)
-        .eq('is_active', true)
-        .select('id,is_trainer')
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return NextResponse.json({ success: false, error: 'Personel aktif tidak ditemukan.' }, { status: 404 });
-      return NextResponse.json({ success: true, isTrainer: data.is_trainer });
     }
     if (action.action === 'DELETE_PERSONNEL') {
       const { data: person, error: lookupError } = await db.from('rnt_personnel').select('id,full_name,normalized_name').eq('id', action.personnelId).maybeSingle();

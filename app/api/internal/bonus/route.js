@@ -133,12 +133,12 @@ export async function GET(request) {
 
   try {
     const db = createInternalDataClient(session);
-    const [batchResult, personnelResult, whitelistResult, assignmentsResult, candidatesResult, paymentsResult] = await Promise.all([
+    const [batchResult, personnelResult, whitelistResult, batchTrainerResult, candidatesResult, paymentsResult] = await Promise.all([
       db.from('recruitment_batches').select('id,name').eq('id', batchId.data).is('deleted_at', null).maybeSingle(),
-      db.from('rnt_personnel').select('id,full_name,position,is_active,is_trainer').order('full_name'),
-      db.from('rnt_personnel_name_whitelist').select('full_name,normalized_name').eq('is_active', true).order('full_name'),
-      db.from('academy_candidate_pics').select('candidate_id,personnel_id').eq('batch_id', batchId.data),
-      db.from('candidates').select('interviewer_name,assist_name').eq('batch_id', batchId.data).is('deleted_at', null),
+      db.from('rnt_personnel').select('id,full_name,normalized_name,position,is_active').order('full_name'),
+      db.from('rnt_personnel_name_whitelist').select('id,full_name,normalized_name').eq('is_active', true).order('full_name'),
+      db.from('academy_batch_trainers').select('whitelist_id').eq('batch_id', batchId.data),
+      db.from('candidates').select('id,interviewer_name,assist_name').eq('batch_id', batchId.data).is('deleted_at', null),
       db.from('personnel_bonus_payments').select('personnel_id,normalized_personnel_name,bonus_type,is_paid').eq('batch_id', batchId.data),
     ]);
     if (paymentsResult.error) {
@@ -148,12 +148,15 @@ export async function GET(request) {
         error: 'Skema pembayaran bonus belum diperbarui. Terapkan migrasi personnel_bonus_payments dan bonus_whitelist_identity, lalu muat ulang halaman.',
       }, 503);
     }
-    const failed = [batchResult, personnelResult, whitelistResult, assignmentsResult, candidatesResult, paymentsResult].find((result) => result.error);
+    if (batchTrainerResult.error) {
+      console.error('Internal batch trainer selection query failed:', batchTrainerResult.error);
+      return response({ success: false, error: 'Pilihan Trainer per batch belum tersedia. Terapkan migrasi academy_batch_trainers.' }, 503);
+    }
+    const failed = [batchResult, personnelResult, whitelistResult, candidatesResult].find((result) => result.error);
     if (failed) throw failed.error;
     if (!batchResult.data) return response({ success: false, error: 'Batch tidak ditemukan.' }, 404);
 
     const personnel = personnelResult.data || [];
-    const personnelById = new Map(personnel.map((person) => [person.id, person]));
     const personnelByName = new Map();
     for (const person of personnel) {
       const normalized = normalizeName(person.full_name);
@@ -176,7 +179,8 @@ export async function GET(request) {
       if (!whitelistByFirstName.has(firstName)) whitelistByFirstName.set(firstName, []);
       whitelistByFirstName.get(firstName).push(person);
     }
-    const activeTrainerIds = new Set(personnel.filter((person) => person.is_active && person.is_trainer).map((person) => person.id));
+    const selectedTrainerIds = new Set((batchTrainerResult.data || []).map((row) => row.whitelist_id));
+    const selectedTrainers = (whitelistResult.data || []).filter((person) => selectedTrainerIds.has(person.id));
     const paymentByKey = new Map();
     for (const payment of paymentsResult.data || []) {
       const key = payment.personnel_id
@@ -186,18 +190,15 @@ export async function GET(request) {
           : null;
       if (key) paymentByKey.set(key, payment.is_paid);
     }
-    const trainerCounts = new Map([...activeTrainerIds].map((personnelId) => [personnelId, 0]));
-    for (const assignment of assignmentsResult.data || []) {
-      if (activeTrainerIds.has(assignment.personnel_id)) trainerCounts.set(assignment.personnel_id, (trainerCounts.get(assignment.personnel_id) || 0) + 1);
-    }
-    const trainers = [...trainerCounts.entries()].map(([personnelId, assignments]) => {
-      const person = personnelById.get(personnelId);
+    const trainers = selectedTrainers.map((person) => {
+      const normalizedName = normalizeName(person.normalized_name || person.full_name);
       return {
-        personnelId,
+        personnelId: null,
+        canonicalName: person.full_name,
         name: person.full_name,
-        assignment: assignments,
-        bonus: assignments * TRAINER_RATE,
-        isPaid: paymentByKey.get(`personnel:${personnelId}:TRAINER`) || false,
+        assignment: 1,
+        bonus: TRAINER_RATE,
+        isPaid: paymentByKey.get(`whitelist:${normalizedName}:TRAINER`) || false,
       };
     }).sort((a, b) => a.name.localeCompare(b.name, 'id'));
 

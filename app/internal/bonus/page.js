@@ -42,6 +42,40 @@ function BonusTable({ title, description, rows, columns, onPaymentChange, pendin
   );
 }
 
+function summarizeBonusRows(rows) {
+  const total = rows.reduce((sum, row) => sum + row.bonus, 0);
+  const paidRows = rows.filter((row) => row.isPaid);
+  const paid = paidRows.reduce((sum, row) => sum + row.bonus, 0);
+  return {
+    total,
+    paid,
+    unpaid: total - paid,
+    paidCount: paidRows.length,
+    unpaidCount: rows.length - paidRows.length,
+  };
+}
+
+function BonusSummaryCard({ title, summary, rate, rateUnit }) {
+  const metrics = [
+    { label: 'Total bonus', amount: summary.total, count: null },
+    { label: 'Sudah dibayar', amount: summary.paid, count: summary.paidCount },
+    { label: 'Belum dibayar', amount: summary.unpaid, count: summary.unpaidCount },
+  ];
+  return <section className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/40">
+    <header className="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Ringkasan {title}</h2>
+      <span className="rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-semibold text-slate-600 dark:bg-[#10291f] dark:text-emerald-200">Rate {currency.format(rate)} / {rateUnit}</span>
+    </header>
+    <div className="grid gap-2 sm:grid-cols-3">
+      {metrics.map((metric) => <div key={metric.label} className="rounded-lg border border-white/80 bg-white/80 px-2.5 py-2 dark:border-emerald-800 dark:bg-[#10291f]">
+        <span className="text-[10px] font-semibold text-slate-500 dark:text-emerald-200">{metric.label}</span>
+        <strong className="mt-0.5 block text-sm text-slate-900 dark:text-emerald-50">{currency.format(metric.amount)}</strong>
+        {metric.count !== null && <span className="block text-[9px] text-slate-500 dark:text-emerald-300">{metric.count} personel</span>}
+      </div>)}
+    </div>
+  </section>;
+}
+
 export default function BonusPage() {
   const { selectedBatch } = useContext(BatchContext);
   const batchId = selectedBatch?.id;
@@ -100,26 +134,23 @@ export default function BonusPage() {
 
   const trainerRows = useMemo(() => (report?.trainers || []).map((row) => ({ ...row, bonusType: 'TRAINER' })), [report]);
   const interviewerRows = useMemo(() => (report?.interviewers || []).map((row) => ({ ...row, bonusType: 'INTERVIEWER' })), [report]);
-  const grandTotal = [...trainerRows, ...interviewerRows].reduce((sum, row) => sum + row.bonus, 0);
+  const trainerSummary = useMemo(() => summarizeBonusRows(trainerRows), [trainerRows]);
+  const interviewerSummary = useMemo(() => summarizeBonusRows(interviewerRows), [interviewerRows]);
 
   return <main className="bonus-page mx-auto max-w-7xl space-y-5">
     <header className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-800">Internal RNT</p><h1 className="mt-1 text-xl font-bold text-slate-900">Kalkulator Bonus</h1><p className="mt-1 text-sm text-slate-500">Rekap otomatis berdasarkan penugasan Trainer dan interview pada batch terpilih.</p></div>
+      <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Internal RNT</p><h1 className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">Kalkulator Bonus</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-300">Rekap otomatis berdasarkan penugasan Trainer dan interview pada batch terpilih.</p></div>
       <div className="rounded-xl bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">Batch: {report?.batch?.name || selectedBatch?.name || 'Belum dipilih'}</div>
     </header>
 
-    <section className="grid gap-3 sm:grid-cols-3">
-      <div className="rounded-xl border border-slate-200 bg-white p-4"><span className="text-xs text-slate-500">Rate Trainer</span><strong className="mt-1 block text-lg text-slate-900">{currency.format(report?.rates?.trainer || 150000)} <small className="text-xs font-medium text-slate-500">/ penugasan</small></strong></div>
-      <div className="rounded-xl border border-slate-200 bg-white p-4"><span className="text-xs text-slate-500">Rate Interviewer</span><strong className="mt-1 block text-lg text-slate-900">{currency.format(report?.rates?.interviewer || 30000)} <small className="text-xs font-medium text-slate-500">/ interview</small></strong></div>
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><span className="text-xs text-emerald-800">Total bonus keseluruhan</span><strong className="mt-1 block text-lg text-emerald-900">{currency.format(grandTotal)}</strong></div>
-    </section>
-
-    {error && <div role="alert" className={`rounded-xl border p-4 text-sm ${error.includes('khusus Admin') ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>{error}{error.includes('Pastikan migrasi') && <p className="mt-1 text-xs">Terapkan file migrasi personnel_bonus_payments sebelum menggunakan halaman ini.</p>}</div>}
+    {error && <div role="alert" className={`rounded-xl border p-4 text-sm ${error.includes('khusus Admin') ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>{error}{error.includes('Pastikan migrasi') && <p className="mt-1 text-xs">Pastikan migrasi personnel_bonus_payments dan bonus_whitelist_identity sudah diterapkan sebelum menggunakan halaman ini.</p>}</div>}
     {loading && <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Memuat rekap bonus…</div>}
     {!loading && !selectedBatch?.id && <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">Pilih batch terlebih dahulu untuk menghitung bonus.</div>}
     {!loading && report && <div className="grid items-start gap-5 xl:grid-cols-2">
+      <BonusSummaryCard title="Trainer" summary={trainerSummary} rate={report.rates.trainer} rateUnit="Trainer terpilih" />
+      <BonusSummaryCard title="Interviewer" summary={interviewerSummary} rate={report.rates.interviewer} rateUnit="interview" />
       {report.unmappedInterviewerNames?.length > 0 && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900 xl:col-span-2">Sebagian nama Interviewer belum cocok dengan master personel. Nama tetap masuk hitungan bonus, tetapi status pembayaran dinonaktifkan sampai nama personel dapat dicocokkan: {report.unmappedInterviewerNames.join(', ')}.</p>}
-      <BonusTable title="Trainer" description={`Bonus dihitung ${currency.format(report.rates.trainer)} × jumlah penugasan PIC Academy.`} rows={trainerRows} columns={[{ key: 'name', label: 'List Trainer' }, { key: 'assignment', label: 'Assignment', render: (row) => `${row.assignment} penugasan` }, { key: 'bonus', label: 'Bonus', render: (row) => currency.format(row.bonus) }]} onPaymentChange={updatePayment} pendingPayments={pendingPayments} />
+      <BonusTable title="Trainer" description={`Bonus tetap ${currency.format(report.rates.trainer)} untuk setiap Trainer yang dipilih pada batch ini.`} rows={trainerRows} columns={[{ key: 'name', label: 'List Trainer' }, { key: 'assignment', label: 'Status tugas', render: () => 'Bertugas' }, { key: 'bonus', label: 'Bonus', render: (row) => currency.format(row.bonus) }]} onPaymentChange={updatePayment} pendingPayments={pendingPayments} />
       <BonusTable title="Interviewer" description={`Bonus dihitung ${currency.format(report.rates.interviewer)} × interview yang tercatat sebagai Officer/Deputy.`} rows={interviewerRows} columns={[{ key: 'name', label: 'List Interviewer' }, { key: 'totalInterviews', label: 'Total Inter', render: (row) => row.totalInterviews }, { key: 'bonus', label: 'Bonus', render: (row) => currency.format(row.bonus) }]} onPaymentChange={updatePayment} pendingPayments={pendingPayments} />
     </div>}
     {toast && <div role="status" className="fixed bottom-5 right-5 z-50 rounded-xl bg-rose-700 px-4 py-3 text-sm font-semibold text-white shadow-lg">{toast}</div>}

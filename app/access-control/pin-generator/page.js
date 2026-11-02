@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
+const ADMIN_VERIFIED_SESSION_KEY = 'rnt-pin-generator-admin-verified';
+
 export default function PinGeneratorPage() {
   const [role, setRole] = useState('STAFF');
   const [adminKeyInput, setAdminKeyInput] = useState('');
@@ -16,6 +18,15 @@ export default function PinGeneratorPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    try {
+      if (window.sessionStorage.getItem(ADMIN_VERIFIED_SESSION_KEY) === '1') {
+        setRole('ADMIN');
+        setAdminVerified(true);
+      }
+    } catch { /* Session storage can be unavailable in restricted browsers. */ }
+  }, []);
+
+  useEffect(() => {
     if (role === 'ADMIN' && !adminVerified) return undefined;
     let active = true;
     const refreshPin = async () => {
@@ -24,7 +35,7 @@ export default function PinGeneratorPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           cache: 'no-store',
-          body: JSON.stringify({ role, ...(role === 'ADMIN' ? { adminKey } : {}) }),
+          body: JSON.stringify({ role, ...(role === 'ADMIN' && adminKey ? { adminKey } : {}) }),
         });
         const data = await response.json();
         if (!active) return;
@@ -35,8 +46,16 @@ export default function PinGeneratorPage() {
             setAdminKey('');
             setAdminKeyInput('');
             setAdminVerified(false);
+            try { window.sessionStorage.removeItem(ADMIN_VERIFIED_SESSION_KEY); } catch { /* Ignore storage failures. */ }
           }
           return;
+        }
+        if (role === 'ADMIN') {
+          try { window.sessionStorage.setItem(ADMIN_VERIFIED_SESSION_KEY, '1'); } catch { /* Server session still works for this page view. */ }
+          if (adminKey) {
+            setAdminKey('');
+            setAdminKeyInput('');
+          }
         }
         setPin(data.pin);
         setExpiresAt(data.expiresAt);
@@ -98,6 +117,12 @@ export default function PinGeneratorPage() {
                 onClick={() => {
                   setRole(value); setPin(''); setLoading(value === 'STAFF'); setCopied(false); setError('');
                   if (value === 'STAFF') { setAdminKey(''); setAdminKeyInput(''); setAdminVerified(false); }
+                  else {
+                    let remembered = false;
+                    try { remembered = window.sessionStorage.getItem(ADMIN_VERIFIED_SESSION_KEY) === '1'; } catch { /* Ask for the key if storage is unavailable. */ }
+                    setAdminVerified(remembered);
+                    setLoading(remembered);
+                  }
                 }}
                 className={`rounded-md px-4 py-2.5 text-sm font-bold transition ${role === value ? 'bg-[#254532] text-white shadow-sm' : 'text-slate-600 hover:text-[#254532]'}`}>
                 {label}

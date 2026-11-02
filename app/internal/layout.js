@@ -732,9 +732,9 @@ function InternalLayoutContent({ children }) {
               <p className="staff-login-department-hint">Pilih departemen yang akan dicantumkan pada tanda tangan balasan CV.</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {[
-                  { id: 'LSPD', name: 'Los Santos Police Department', logo: '/logos/lspd.png' },
-                  { id: 'LSSD', name: 'Los Santos Sheriff Department', logo: '/logos/lssd.png' },
-                  { id: 'SASP', name: 'San Andreas State Police', logo: '/logos/sasp.png' },
+                  { id: 'LSPD', name: 'Los Santos Police Department', logo: '/logos/lspd.svg' },
+                  { id: 'LSSD', name: 'Los Santos Sheriff Department', logo: '/logos/lssd.svg' },
+                  { id: 'SASP', name: 'San Andreas State Police', logo: '/logos/sasp.svg' },
                 ].map((department) => (
                   <label key={department.id} className={`staff-login-department ${inputDepartment === department.id ? 'selected' : ''}`}>
                     <input
@@ -907,9 +907,9 @@ function InternalLayoutContent({ children }) {
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/interview` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'interview' || pathname === '/internal/interview' ? 'active' : ''}`}><span>◷</span>Interview panel</Link>
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/absensi` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'absensi' || routeSection === 'academy' || pathname === '/internal/academy' ? 'active' : ''}`}><span>✓</span>Absensi Academy</Link>
             {userRole === 'ADMIN' && <>
+              <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/bonus` : '/internal/bonus'} className={`staff-nav-link ${routeSection === 'bonus' || pathname === '/internal/bonus' ? 'active' : ''}`}><span>$</span>Kalkulator Bonus<span className="nav-admin-tag">RNT</span></Link>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/audit-log` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'audit-log' || pathname === '/internal/audit-logs' ? 'active' : ''}`}><span>≡</span>Audit log<span className="nav-admin-tag">RNT</span></Link>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/management` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'management' || pathname === '/internal/management' ? 'active' : ''}`}><span>⚙</span>Manajemen<span className="nav-admin-tag">RNT</span></Link>
-              <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/bonus` : '/internal/bonus'} className={`staff-nav-link ${routeSection === 'bonus' || pathname === '/internal/bonus' ? 'active' : ''}`}><span>$</span>Kalkulator Bonus<span className="nav-admin-tag">RNT</span></Link>
             </>}
           </nav>
         </div>

@@ -54,7 +54,7 @@ export default function RecruitmentManagementPage() {
   const { selectedBatch, cacheScope = 'staff' } = useContext(BatchContext);
   const pendingIdPrefix = useId();
   const selectedBatchId = selectedBatch?.id;
-  const [data, setData] = useState({ personnel: [], whitelist: [], candidates: [], groups: [], groupMembers: [], candidateGroups: [] });
+  const [data, setData] = useState({ personnel: [], whitelist: [], candidates: [], groups: [], groupMembers: [], candidateGroups: [], batchTrainerWhitelistIds: [] });
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [targetGroupId, setTargetGroupId] = useState('');
   const [groupEditorOpen, setGroupEditorOpen] = useState(false);
@@ -88,6 +88,8 @@ export default function RecruitmentManagementPage() {
   const [personnelRoleFilter, setPersonnelRoleFilter] = useState('ALL');
   const [personnelPage, setPersonnelPage] = useState(1);
   const [whitelistSearch, setWhitelistSearch] = useState('');
+  const [trainerSearch, setTrainerSearch] = useState('');
+  const [trainerPage, setTrainerPage] = useState(1);
   const [whitelistRoleFilter, setWhitelistRoleFilter] = useState('ALL');
   const [whitelistPage, setWhitelistPage] = useState(1);
 
@@ -127,7 +129,12 @@ export default function RecruitmentManagementPage() {
   }, [groupEditorOpen, saving]);
 
   const activePersonnel = useMemo(() => data.personnel.filter((person) => person.is_active), [data.personnel]);
-  const activeTrainers = useMemo(() => activePersonnel.filter((person) => person.is_trainer), [activePersonnel]);
+  const activeWhitelist = useMemo(() => data.whitelist.filter((item) => item.is_active), [data.whitelist]);
+  const selectedTrainerIds = useMemo(() => new Set(data.batchTrainerWhitelistIds || []), [data.batchTrainerWhitelistIds]);
+  const activeTrainers = useMemo(() => activeWhitelist.filter((person) => selectedTrainerIds.has(person.id)), [activeWhitelist, selectedTrainerIds]);
+  const searchedTrainerWhitelist = useMemo(() => activeWhitelist.filter((person) => person.full_name.toLocaleLowerCase('id-ID').includes(trainerSearch.trim().toLocaleLowerCase('id-ID'))), [activeWhitelist, trainerSearch]);
+  const currentTrainerPage = Math.min(trainerPage, Math.max(1, Math.ceil(searchedTrainerWhitelist.length / 10)));
+  const visibleTrainerWhitelist = useMemo(() => searchedTrainerWhitelist.slice((currentTrainerPage - 1) * 10, currentTrainerPage * 10), [searchedTrainerWhitelist, currentTrainerPage]);
   const pendingWhitelist = useMemo(() => {
     const profiles = new Set(data.personnel.map((person) => person.normalized_name));
     return data.whitelist.filter((item) => item.is_active && !profiles.has(item.normalized_name));
@@ -383,23 +390,26 @@ export default function RecruitmentManagementPage() {
     return result;
   };
 
-  const setPersonnelTrainer = async (person, isTrainer) => {
+  const setBatchTrainer = async (person, isSelected) => {
     const previousData = data;
     const cacheKey = `${cacheScope}:management:${selectedBatchId}`;
-    const nextData = { ...data, personnel: data.personnel.map((item) => item.id === person.id ? { ...item, is_trainer: isTrainer } : item) };
+    const currentIds = new Set(data.batchTrainerWhitelistIds || []);
+    if (isSelected) currentIds.add(person.id);
+    else currentIds.delete(person.id);
+    const nextIds = [...currentIds];
+    const nextData = { ...data, batchTrainerWhitelistIds: nextIds };
     setData(nextData);
     writeClientData(cacheKey, nextData);
     setTrainerSaving(true);
     setError('');
-    setMessage('Menyimpan pengaturan Trainer…');
+    setMessage('Menyimpan Trainer batch…');
     try {
-      await postManagement({ action: 'SET_PERSONNEL_TRAINER', personnelId: person.id, isTrainer });
-      setMessage(`${person.full_name} ${isTrainer ? 'ditetapkan sebagai Trainer aktif' : 'dikeluarkan dari daftar Trainer'}.`);
+      await postManagement({ action: 'SET_BATCH_TRAINERS', batchId: selectedBatchId, whitelistIds: nextIds });
+      setMessage(`${person.full_name} ${isSelected ? 'ditambahkan ke' : 'dikeluarkan dari'} daftar Trainer ${selectedBatch?.name}.`);
     } catch (issue) {
       setData(previousData);
-      const cached = readClientData(cacheKey);
-      if (cached) writeClientData(cacheKey, { ...cached, personnel: cached.personnel.map((item) => item.id === person.id ? { ...item, is_trainer: person.is_trainer } : item) });
-      setError(issue.message || 'Pengaturan Trainer gagal disimpan. Perubahan dibatalkan.');
+      writeClientData(cacheKey, previousData);
+      setError(issue.message || 'Pengaturan Trainer batch gagal disimpan. Perubahan dibatalkan.');
       setMessage('');
     } finally {
       setTrainerSaving(false);
@@ -642,7 +652,7 @@ export default function RecruitmentManagementPage() {
         ['groups', 'Departemen Academy', `${['LSPD', 'LSSD', 'DOC', ''].filter((department) => academyCandidates.some((candidate) => departmentForCandidate(candidate) === department)).length} departemen`, 'Kelompok otomatis atau manual'],
         ['candidates', 'Data Kandidat', `${data.candidates.length} data`, 'Edit, hapus, dan pulihkan kandidat'],
         ['personnel', 'Akses Staff', `${activePersonnel.length} personel aktif`, 'Kelola identitas, PIN, dan peran'],
-        ['trainers', 'Pengaturan Trainer', `${activeTrainers.length} Trainer aktif`, 'Pilih personel untuk bonus PIC Academy'],
+        ['trainers', 'Pengaturan Trainer', `${activeTrainers.length} Trainer batch ini`, 'Pilih Trainer secara terpisah untuk setiap batch'],
         ['blacklist', 'Catatan Status CID', `${(data.blacklist || []).length} CID`, 'Kelola status dan catatan kandidat berdasarkan CID'],
       ].map(([key, title, count, description]) => <button key={key} type="button" aria-pressed={activeModule === key} onClick={() => { setActiveModule(key); setError(''); setMessage(''); }} className={`management-module-card rounded-xl border p-3 text-left shadow-sm transition ${activeModule === key ? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-100' : 'border-slate-200 bg-white hover:border-emerald-300'}`}><span className="flex items-center justify-between gap-2"><strong className="text-xs font-bold text-slate-900">{title}</strong>{activeModule === key && <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[9px] font-bold text-white">Aktif</span>}</span><span className="mt-1.5 block text-[11px] font-semibold text-[#1E3A2B]">{count}</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{description}</span></button>)}
     </section>
@@ -680,8 +690,9 @@ export default function RecruitmentManagementPage() {
     </section>}
 
     {activeModule === 'trainers' && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <header className="border-b border-slate-100 p-4 sm:p-5"><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Pengaturan bonus Academy</p><h3 className="mt-1 text-lg font-bold text-slate-900">Trainer aktif · {activeTrainers.length}</h3><p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">Pilih personel aktif yang menjadi Trainer/PIC Academy. Hanya personel yang dipilih di sini yang masuk rekap bonus Trainer; penugasannya tetap dihitung dari assignment PIC pada batch.</p></header>
-      {loading ? <p className="p-10 text-center text-sm text-slate-500">Memuat daftar personel…</p> : activePersonnel.length ? <div className="management-trainer-scroll max-h-[55vh] overflow-auto"><table className="management-trainer-table w-full min-w-[600px] text-left text-sm"><thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Nama personel</th><th className="px-4 py-3">Departemen</th><th className="px-4 py-3">Peran</th><th className="px-4 py-3 text-center">Trainer bonus aktif</th></tr></thead><tbody className="divide-y divide-slate-100">{activePersonnel.map((person) => <tr key={person.id} className="hover:bg-slate-50/70"><td className="px-4 py-3 font-semibold text-slate-800">{person.full_name}</td><td className="px-4 py-3 text-slate-600">{person.department || '—'}</td><td className="px-4 py-3 text-slate-600">{person.role === 'ADMIN' ? 'Admin RNT' : 'Staff'}</td><td className="px-4 py-3 text-center"><label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100"><input type="checkbox" checked={Boolean(person.is_trainer)} disabled={trainerSaving} onChange={(event) => setPersonnelTrainer(person, event.target.checked)} className="h-4 w-4 accent-emerald-700" aria-label={`${person.is_trainer ? 'Nonaktifkan' : 'Aktifkan'} ${person.full_name} sebagai Trainer`} />{person.is_trainer ? 'Aktif' : 'Tidak aktif'}</label></td></tr>)}</tbody></table></div> : <p className="p-8 text-center text-sm text-slate-500">Belum ada personel aktif untuk dipilih sebagai Trainer.</p>}
+      <header className="border-b border-slate-100 p-4 sm:p-5"><p className="management-panel-eyebrow text-xs font-bold uppercase tracking-wider text-[#1E3A2B]">Pengaturan bonus Academy · {selectedBatch.name}</p><h3 className="mt-1 text-lg font-bold text-slate-900">Trainer terpilih · {activeTrainers.length}</h3><p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">Pilih Trainer yang bertugas pada batch ini. Setiap Trainer terpilih otomatis mendapat satu bonus; pilihan untuk batch lain terpisah dan dimulai kosong.</p></header>
+      <div className="border-b border-slate-100 p-4"><label className="block max-w-sm"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Cari nama whitelist</span><input type="search" value={trainerSearch} onChange={(event) => { setTrainerSearch(event.target.value); setTrainerPage(1); }} placeholder="Ketik nama personel…" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#1E3A2B]" /></label></div>
+      {loading ? <p className="p-10 text-center text-sm text-slate-500">Memuat daftar whitelist…</p> : searchedTrainerWhitelist.length ? <><div className="overflow-x-auto"><table className="management-trainer-table w-full min-w-[600px] text-left text-sm"><thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Nama whitelist</th><th className="px-4 py-3">Status login</th><th className="px-4 py-3">Peran</th><th className="px-4 py-3 text-center">Trainer untuk batch ini</th></tr></thead><tbody className="divide-y divide-slate-100">{visibleTrainerWhitelist.map((person) => { const hasLoggedIn = data.personnel.some((profile) => profile.normalized_name === person.normalized_name && profile.is_active); const selected = selectedTrainerIds.has(person.id); return <tr key={person.id} className="hover:bg-slate-50/70"><td className="px-4 py-3 font-semibold text-slate-800">{person.full_name}</td><td className="px-4 py-3 text-slate-600">{hasLoggedIn ? 'Sudah login' : 'Belum login'}</td><td className="px-4 py-3 text-slate-600">{person.role === 'ADMIN' ? 'Admin RNT' : 'Staff'}</td><td className="px-4 py-3 text-center"><label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"><input type="checkbox" checked={selected} disabled={trainerSaving} onChange={(event) => setBatchTrainer(person, event.target.checked)} className="h-4 w-4 accent-emerald-700" aria-label={`${selected ? 'Keluarkan' : 'Pilih'} ${person.full_name} sebagai Trainer batch ini`} />{selected ? 'Dipilih' : 'Pilih'}</label></td></tr>; })}</tbody></table></div><TablePagination page={currentTrainerPage} total={searchedTrainerWhitelist.length} onPageChange={setTrainerPage} /></> : <p className="p-8 text-center text-sm text-slate-500">{activeWhitelist.length ? 'Tidak ada nama whitelist yang cocok dengan pencarian.' : 'Belum ada whitelist aktif untuk dipilih sebagai Trainer.'}</p>}
     </section>}
 
     {activeModule === 'blacklist' && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

@@ -17,7 +17,7 @@ import { displayStaffFirstNames } from '@/lib/staff-name-utils';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
-const departmentLogos = { LSSD: '/logos/lssd.png', LSPD: '/logos/lspd.png' };
+const departmentLogos = { LSSD: '/logos/lssd.svg', LSPD: '/logos/lspd.svg' };
 function departmentBadgeClass(department) {
   if (department === 'LSSD') return 'department-badge department-badge-lssd';
   if (department === 'LSPD') return 'department-badge department-badge-lspd';
