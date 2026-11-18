@@ -81,7 +81,7 @@ function createPendingBbcode(candidate, reasons, customReason, staffProfile) {
   ].filter(Boolean).join('\n');
 
   return `[divbox=white]
-[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.svg[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.svg[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
+[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.png[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.png[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
 [center][size=200][b]LAW ENFORCEMENT OFFICER[/b][/size][/center]
 [center][size=100][b]Recruitment and Training Division[/b][/size][/center]
 [divbox=darkblue][/divbox]
@@ -116,7 +116,7 @@ function createStandardRejectedBbcode(candidate, staffProfile, rejectionReason =
   const staffTitle = [staffProfile.rank, staffProfile.position].filter(Boolean).join(' · ') || 'Recruitment Staff';
 
   return `[divbox=white]
-[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.svg[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.svg[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
+[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.png[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.png[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
 [center][size=200][b]LAW ENFORCEMENT OFFICER[/b][/size][/center]
 [center][size=100][b]Recruitment and Training Divison[/b][/size][/center]
 [divbox=darkblue][/divbox]
@@ -154,7 +154,7 @@ function createAcceptedBbcode(candidate, staffProfile, interviewSchedule, interv
   ].filter(Boolean).join('\n');
 
   return `[divbox=white]
-[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.svg[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.svg[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
+[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.png[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.png[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
 [center][size=200][b]LAW ENFORCEMENT OFFICER[/b][/size][/center]
 [center][size=100][b]Recruitment and Training Division[/b][/size][/center]
 [divbox=darkblue][/divbox]
@@ -284,6 +284,14 @@ export default function ReviewPage() {
       saran: cand.saran || '', 
       notesInvestigator: cand.notes_investigator || '' 
     });
+    setPendingReasonsByCandidate((current) => ({
+      ...current,
+      [cand.id]: Array.isArray(cand.pending_review_reasons) ? cand.pending_review_reasons : [],
+    }));
+    setCustomPendingReasonByCandidate((current) => ({
+      ...current,
+      [cand.id]: cand.pending_review_custom_reason || '',
+    }));
   };
 
   const isCvNoteRequired = form.statusCv === 'Pending' || form.statusCv === 'Rejected';
@@ -312,7 +320,15 @@ export default function ReviewPage() {
     }
 
     const candidateBeforeUpdate = candidates.find((candidate) => candidate.id === selectedId);
-    const updatedCandidate = { ...candidateBeforeUpdate, ...form, status_cv: form.statusCv, mdt_check: form.mdtCheck, notes_investigator: form.notesInvestigator };
+    const updatedCandidate = {
+      ...candidateBeforeUpdate,
+      ...form,
+      status_cv: form.statusCv,
+      mdt_check: form.mdtCheck,
+      notes_investigator: form.notesInvestigator,
+      pending_review_reasons: selectedPendingReasons,
+      pending_review_custom_reason: selectedCustomPendingReason,
+    };
     const cacheKey = `${cacheScope}:review:${selectedBatch?.id || ''}`;
     writeClientData(cacheKey, candidates.map((candidate) => candidate.id === selectedId ? updatedCandidate : candidate));
     setSelectedCandidateData(updatedCandidate);
@@ -326,7 +342,13 @@ export default function ReviewPage() {
       const res = await fetch(candidatesUrl(selectedBatch?.id, 'review'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'UPDATE_EVALUATION', id: selectedId, ...form }),
+        body: JSON.stringify({
+          action: 'UPDATE_EVALUATION',
+          id: selectedId,
+          ...form,
+          pendingReasons: selectedPendingReasons,
+          customPendingReason: selectedCustomPendingReason,
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Hasil review gagal disimpan.');
@@ -337,6 +359,14 @@ export default function ReviewPage() {
       writeClientData(cacheKey, candidates.map((candidate) => candidate.id === selectedId ? candidateBeforeUpdate : candidate));
       setCandidates((current) => current.map((candidate) => candidate.id === selectedId ? candidateBeforeUpdate : candidate));
       setSelectedCandidateData(candidateBeforeUpdate || null);
+      setPendingReasonsByCandidate((current) => ({
+        ...current,
+        [selectedId]: Array.isArray(candidateBeforeUpdate?.pending_review_reasons) ? candidateBeforeUpdate.pending_review_reasons : [],
+      }));
+      setCustomPendingReasonByCandidate((current) => ({
+        ...current,
+        [selectedId]: candidateBeforeUpdate?.pending_review_custom_reason || '',
+      }));
       setValidationError(issue.message || 'Hasil review gagal disimpan. Perubahan dibatalkan.');
       setMsg('');
     } finally {

@@ -10,14 +10,12 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="id" suppressHydrationWarning>
-      <head>
-        <Script id="rnt-theme-preference" strategy="beforeInteractive">
-          {"try{if(localStorage.getItem('rnt-theme')==='dark')document.documentElement.dataset.theme='dark'}catch{}"}
-        </Script>
-      </head>
       <body className="bg-slate-100 text-slate-900 antialiased" suppressHydrationWarning>
         {children}
         <ThemeToggle />
+        <Script id="rnt-theme-preference" strategy="beforeInteractive">
+          {"try{if(localStorage.getItem('rnt-theme')==='dark')document.documentElement.dataset.theme='dark'}catch{}"}
+        </Script>
       </body>
     </html>
   );

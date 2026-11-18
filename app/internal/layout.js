@@ -722,7 +722,7 @@ function InternalLayoutContent({ children }) {
               />
               <datalist id="staff-position-options">
                 <option value="Recruitment And Training Division" />
-                <option value="Personnel Services Officer" />
+                <option value="Human Resources Bureau" />
               </datalist>
               <p className="staff-login-helper mt-1 text-left">Pilih saran atau ketik langsung pada kolom.</p>
             </div>

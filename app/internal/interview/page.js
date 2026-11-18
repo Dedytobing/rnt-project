@@ -46,7 +46,7 @@ function createAcademyBbcode(candidate, staffProfile, batch, interviewLocation) 
   const schedule = formatAcademySchedule(batch);
 
   return `[divbox=white]
-[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.svg[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.svg[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
+[center][img]https://imagizer.imageshack.com/v2/200x200q70/924/Rs1Hi8.png[/img][img]https://imagizer.imageshack.com/img924/9329/WjRSSl.png[/img][img]https://imageshack.com/i/pogQ42LOp[/img][/center]
 [center][size=200][b]LAW ENFORCEMENT OFFICER[/b][/size][/center]
 [center][size=100][b]Recruitment and Training Divison[/b][/size][/center]
 [divbox=darkblue][/divbox]

@@ -222,7 +222,7 @@ export async function POST(request) {
 
     // 2. EVALUASI CV (Staff / Evaluator)
     if (action === 'UPDATE_EVALUATION') {
-      const { id, statusCv, mdtCheck, catatan, saran, notesInvestigator } = body;
+      const { id, statusCv, mdtCheck, catatan, saran, notesInvestigator, pendingReasons, customPendingReason } = body;
       const staffName = session.name;
 
       const { data: currentCandidate, error: currentCandidateError } = await supabase
@@ -249,6 +249,8 @@ export async function POST(request) {
         catatan,
         saran,
         notes_investigator: notesInvestigator,
+        pending_review_reasons: pendingReasons,
+        pending_review_custom_reason: customPendingReason,
         updated_at: new Date()
       }).eq('id', id);
 

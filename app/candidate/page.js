@@ -156,7 +156,10 @@ export default function CandidatePage() {
     <main className="candidate-page">
       <header className="candidate-header">
         <Link href="/" onClick={(event) => { event.preventDefault(); navigateBack(); }} className="candidate-brand"><span>Recruitment and Training<small>Personnel Portal</small></span></Link>
-        <button type="button" onClick={() => navigateTo('/internal/select-batch')} className="candidate-staff-link">Portal staff <span>↗</span></button>
+        <nav className="flex items-center gap-2">
+          <Link href="/cv-generator" className="inline-flex min-h-[34px] items-center rounded-md border border-emerald-800/25 px-2.5 text-[10px] font-bold text-emerald-900 transition hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-200 dark:hover:bg-emerald-950/50 sm:px-3 sm:text-[11px]">Generator CV</Link>
+          <button type="button" onClick={() => navigateTo('/internal/select-batch')} className="candidate-staff-link">Portal staff <span>🏠︎</span></button>
+        </nav>
       </header>
 
       <section className="candidate-form-wrap">
