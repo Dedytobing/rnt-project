@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 const INITIAL_FORM = {
@@ -253,6 +253,10 @@ function ForumVisual({ form }) {
 }
 
 export default function CvGeneratorPage() {
+  useEffect(() => {
+    document.title = 'RNT | CV Generator';
+  }, []);
+
   const [form, setForm] = useState(INITIAL_FORM);
   const [copyMessage, setCopyMessage] = useState('');
   const [titleCopyMessage, setTitleCopyMessage] = useState('');

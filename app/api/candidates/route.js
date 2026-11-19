@@ -107,6 +107,25 @@ export async function GET(request) {
       status_interview: c.status_interview || ''
     }));
 
+    const candidatesMissingFastTrackReviewer = cleanData.filter((candidate) => candidate.is_fast_track && !candidate.officer_reviewer);
+    if (candidatesMissingFastTrackReviewer.length) {
+      const candidateNames = [...new Set(candidatesMissingFastTrackReviewer.map((candidate) => candidate.nama).filter(Boolean))];
+      const { data: fastTrackLogs, error: fastTrackLogsError } = await supabase.from('personnel_audit_logs')
+        .select('personnel_name,target_name,action_details,created_at')
+        .eq('event', 'FAST_TRACK_CANDIDATE').in('target_name', candidateNames)
+        .order('created_at', { ascending: false });
+      if (fastTrackLogsError) {
+        console.warn('Fast Track reviewer attribution lookup failed:', fastTrackLogsError);
+      } else {
+        for (const candidate of candidatesMissingFastTrackReviewer) {
+          const batchMarker = `batch ${candidate.batch_id}`;
+          const matchingLog = (fastTrackLogs || []).find((log) => log.target_name === candidate.nama
+            && String(log.action_details || '').includes(batchMarker));
+          if (matchingLog?.personnel_name) candidate.officer_reviewer = matchingLog.personnel_name;
+        }
+      }
+    }
+
     const { data: blacklist, error: blacklistError } = await supabase.from('candidate_blacklist').select('cid,status,reason');
     if (blacklistError) {
       console.error('Candidate blacklist query failed:', blacklistError);

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
 import { cleanWhitelistRosterLine } from '@/lib/whitelist-parser';
+import { isSensitiveFeatureAllowed, listSensitiveFeatureAccess, normalizeSensitiveAccessName } from '@/lib/sensitive-feature-access';
 
 const candidateAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('SOFT_DELETE'), candidateId: z.string().min(1).max(100), batchId: z.uuid() }).strict(),
@@ -20,6 +21,10 @@ const batchTrainerAction = z.object({
 }).strict().refine((value) => new Set(value.whitelistIds).size === value.whitelistIds.length, {
   message: 'Daftar Trainer batch berisi pilihan duplikat.',
 });
+const sensitiveAccessAction = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('ADD_SENSITIVE_ACCESS'), fullName: z.string().trim().min(2).max(120) }).strict(),
+  z.object({ action: z.literal('REVOKE_SENSITIVE_ACCESS'), accessId: z.uuid() }).strict(),
+]);
 const personnelAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('SAVE_BLACKLIST'), blacklistId: z.uuid().nullable().optional(), cid: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9]+$/).transform((value) => value.toUpperCase()), status: z.enum(['Recommended', 'Yellowlist', 'Blacklist']), reason: z.string().trim().min(2).max(2000) }).strict(),
   z.object({ action: z.literal('DELETE_BLACKLIST'), blacklistId: z.uuid() }).strict(),
@@ -46,28 +51,47 @@ async function recordPersonnelActivity(db, session, event, targetName, actionDet
 export async function GET(request) {
   const session = getInternalSession(request);
   if (!session) return NextResponse.json({ success: false, error: 'Sesi personel diperlukan.' }, { status: 401 });
-  if (session.role !== 'ADMIN') return NextResponse.json({ success: false, error: 'Akses Admin RNT diperlukan.' }, { status: 403 });
+  const sessionCanAccessSensitiveFeatures = await isSensitiveFeatureAllowed(session);
+  if (session.role !== 'ADMIN' && !sessionCanAccessSensitiveFeatures) return NextResponse.json({ success: false, error: 'Akses Manajemen ditolak.' }, { status: 403 });
   try {
     const db = createInternalDataClient(session);
     const batchId = z.uuid().safeParse(new URL(request.url).searchParams.get('batch_id'));
     if (!batchId.success) return NextResponse.json({ success: false, error: 'Pilih batch untuk memuat data manajemen.' }, { status: 400 });
+    const requestUrl = new URL(request.url);
+    const includesSensitiveData = requestUrl.searchParams.get('include_sensitive') === 'true';
+    if (includesSensitiveData && !sessionCanAccessSensitiveFeatures) {
+      return NextResponse.json({ success: false, error: 'Akses fitur sensitif ditolak.' }, { status: 403 });
+    }
     const { data: batch, error: batchError } = await db.from('recruitment_batches')
       .select('id,name,is_active,registration_start,registration_end,review_start,review_end,interview_start,interview_end,academy_start,academy_end')
       .eq('id', batchId.data).is('deleted_at', null).maybeSingle();
     if (batchError) throw batchError;
     if (!batch) return NextResponse.json({ success: false, error: 'Batch tidak ditemukan atau sudah dihapus.' }, { status: 404 });
-    const [personnel, whitelist, candidates, blacklist, batchTrainers] = await Promise.all([
-      db.from('rnt_personnel').select('id,full_name,normalized_name,role,rank,position,department,is_active').order('full_name'),
-      db.from('rnt_personnel_name_whitelist').select('id,full_name,normalized_name,role,is_active,created_at').order('full_name'),
-      db.from('candidates').select('id,nama,cid,gender,link_cv,batch_id,deleted_at,deleted_by,status_cv,status_interview,mdt_check,catatan,notes_investigator,notes_interviewer,created_at,mapping_dept,dept_preference').eq('batch_id', batchId.data).order('created_at', { ascending: false }),
-      db.from('candidate_blacklist').select('id,cid,status,reason,created_at,updated_at').order('cid'),
-      db.from('academy_batch_trainers').select('whitelist_id').eq('batch_id', batchId.data),
+    const canAccessSensitiveFeatures = includesSensitiveData && sessionCanAccessSensitiveFeatures;
+    const restrictedStaffView = session.role !== 'ADMIN';
+    const [personnel, whitelist, candidates, blacklist, batchTrainers, sensitiveAccess] = await Promise.all([
+      db.from('rnt_personnel').select(canAccessSensitiveFeatures ? 'id,full_name,normalized_name,role,rank,position,department,is_active' : 'id,full_name,department,is_active').order('full_name'),
+      canAccessSensitiveFeatures
+        ? db.from('rnt_personnel_name_whitelist').select('id,full_name,normalized_name,role,is_active,created_at').order('full_name')
+        : Promise.resolve({ data: [], error: null }),
+      restrictedStaffView
+        ? Promise.resolve({ data: [], error: null })
+        : db.from('candidates').select('id,nama,cid,gender,link_cv,batch_id,deleted_at,deleted_by,status_cv,status_interview,mdt_check,catatan,notes_investigator,notes_interviewer,created_at,mapping_dept,dept_preference,is_fast_track,fast_track_note').eq('batch_id', batchId.data).order('created_at', { ascending: false }),
+      restrictedStaffView
+        ? Promise.resolve({ data: [], error: null })
+        : db.from('candidate_blacklist').select('id,cid,status,reason,created_at,updated_at').order('cid'),
+      canAccessSensitiveFeatures
+        ? db.from('academy_batch_trainers').select('whitelist_id').eq('batch_id', batchId.data)
+        : Promise.resolve({ data: [], error: null }),
+      canAccessSensitiveFeatures
+        ? listSensitiveFeatureAccess(db).then((data) => ({ data, error: null })).catch((error) => ({ data: [], error }))
+        : Promise.resolve({ data: [], error: null }),
     ]);
     if (batchTrainers.error) {
       console.error('Batch trainer selection query failed:', batchTrainers.error);
       return NextResponse.json({ success: false, error: 'Pengaturan Trainer per batch belum tersedia. Terapkan migrasi 20261102010000_batch_scoped_academy_trainers.sql.' }, { status: 503 });
     }
-    const failed = [personnel, whitelist, candidates, blacklist].find((result) => result.error);
+    const failed = [personnel, whitelist, candidates, blacklist, sensitiveAccess].find((result) => result.error);
     if (failed) throw failed.error;
     return NextResponse.json({
       success: true,
@@ -77,6 +101,7 @@ export async function GET(request) {
       candidates: candidates.data || [],
       blacklist: blacklist.data || [],
       batchTrainerWhitelistIds: (batchTrainers.data || []).map((row) => row.whitelist_id).filter((id) => (whitelist.data || []).some((person) => person.id === id && person.is_active)),
+      sensitiveAccess: sensitiveAccess.data || [],
       groups: [],
       groupMembers: [],
       candidateGroups: [],
@@ -94,12 +119,50 @@ export async function POST(request) {
   if (!session) return NextResponse.json({ success: false, error: 'Sesi personel diperlukan.' }, { status: 401 });
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ success: false, error: 'Format permintaan tidak valid.' }, { status: 400 }); }
-  if (session.role !== 'ADMIN') return NextResponse.json({ success: false, error: 'Aksi ini hanya dapat dilakukan Admin RNT.' }, { status: 403 });
-  const parsed = [candidateAction, departmentAction, batchTrainerAction, personnelAction].map((schema) => schema.safeParse(body)).find((result) => result.success);
+  const parsed = [candidateAction, departmentAction, batchTrainerAction, personnelAction, sensitiveAccessAction].map((schema) => schema.safeParse(body)).find((result) => result.success);
   if (!parsed) return NextResponse.json({ success: false, error: 'Format atau nilai permintaan tidak valid.' }, { status: 400 });
   const action = parsed.data;
+  const sensitiveActions = new Set([
+    'SET_BATCH_TRAINERS',
+    'ADD_SENSITIVE_ACCESS', 'REVOKE_SENSITIVE_ACCESS',
+    'SAVE_PERSONNEL', 'DELETE_PERSONNEL',
+    'ADD_WHITELIST', 'BULK_WHITELIST', 'UPDATE_WHITELIST_ROLE', 'DELETE_WHITELIST',
+  ]);
+  const isSensitiveAction = sensitiveActions.has(action.action);
+  const canAccessSensitiveFeatures = await isSensitiveFeatureAllowed(session);
+  if (isSensitiveAction && !canAccessSensitiveFeatures) {
+    return NextResponse.json({ success: false, error: 'Akses fitur sensitif ditolak.' }, { status: 403 });
+  }
+  if (session.role !== 'ADMIN' && !isSensitiveAction) return NextResponse.json({ success: false, error: 'Aksi ini hanya dapat dilakukan Admin RNT.' }, { status: 403 });
   const db = createInternalDataClient(session);
   try {
+    if (action.action === 'ADD_SENSITIVE_ACCESS') {
+      const fullName = action.fullName.replace(/\s+/g, ' ').trim();
+      const normalizedName = normalizeSensitiveAccessName(fullName);
+      const { error } = await db.from('rnt_sensitive_feature_access').upsert({
+        full_name: fullName, normalized_name: normalizedName, is_active: true,
+        created_by: session.name, updated_at: new Date().toISOString(),
+      }, { onConflict: 'normalized_name' });
+      if (error) throw error;
+      await recordPersonnelActivity(db, session, 'SENSITIVE_ACCESS_ADDED', fullName, `Memberikan akses fitur sensitif kepada ${fullName}.`);
+      const access = await listSensitiveFeatureAccess(db);
+      return NextResponse.json({ success: true, sensitiveAccess: access });
+    }
+    if (action.action === 'REVOKE_SENSITIVE_ACCESS') {
+      const { data: target, error: lookupError } = await db.from('rnt_sensitive_feature_access')
+        .select('id,full_name,is_active').eq('id', action.accessId).maybeSingle();
+      if (lookupError) throw lookupError;
+      if (!target || !target.is_active) return NextResponse.json({ success: false, error: 'Akses tidak ditemukan atau sudah dicabut.' }, { status: 404 });
+      const activeAccess = await listSensitiveFeatureAccess(db);
+      if (activeAccess.filter((entry) => entry.is_active).length <= 1) {
+        return NextResponse.json({ success: false, error: 'Akses terakhir tidak dapat dicabut. Tambahkan pengelola lain terlebih dahulu.' }, { status: 409 });
+      }
+      const { error } = await db.from('rnt_sensitive_feature_access').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', target.id);
+      if (error) throw error;
+      await recordPersonnelActivity(db, session, 'SENSITIVE_ACCESS_REVOKED', target.full_name, `Mencabut akses fitur sensitif dari ${target.full_name}.`);
+      const access = await listSensitiveFeatureAccess(db);
+      return NextResponse.json({ success: true, sensitiveAccess: access });
+    }
     if (action.action === 'SET_BATCH_TRAINERS') {
       const { data: batch, error: batchError } = await db.from('recruitment_batches')
         .select('id,name').eq('id', action.batchId).is('deleted_at', null).maybeSingle();

@@ -40,7 +40,7 @@ const AttendanceRowItem = memo(function AttendanceRowItem({ candidate, departmen
   const statusOptions = [['PRESENT', 'Hadir'], ['ABSENT', 'T.Hadir'], ['EXCUSED', 'Izin']];
   return <tr className="h-14 hover:bg-slate-50/70">
     <td className="h-14 px-4 py-2"><input type="checkbox" aria-label={'Pilih ' + candidate.nama} checked={selected} onChange={() => onToggle(key)} className="h-4 w-4 accent-[#1E3A2B]" /></td>
-    <td className="h-14 px-3 py-2"><div className="truncate font-semibold text-slate-800">{candidate.nama}</div><div className="truncate text-xs text-slate-500">CID: {candidate.cid || 'Belum dicatat'}</div></td>
+    <td className="h-14 px-3 py-2"><div className="flex flex-wrap items-center gap-1.5"><span className="truncate font-semibold text-slate-800">{candidate.nama}</span></div><div className="truncate text-xs text-slate-500">CID: {candidate.cid || 'Belum dicatat'}</div></td>
     <td className="h-14 truncate px-3 py-2 text-xs text-slate-600">{department}</td>
     <td className="h-14 px-3 py-2"><span className={'inline-flex max-w-[280px] truncate rounded-full px-2 py-1 text-[11px] font-semibold ring-1 ring-inset ' + statusStyle(status)} title={statusText}>{statusText}</span></td>
     <td className="h-14 whitespace-nowrap px-3 py-2"><div className="inline-flex rounded-lg bg-slate-100 p-0.5" role="group" aria-label={'Status absensi ' + candidate.nama}>{statusOptions.map(([value, label]) => {
@@ -51,7 +51,7 @@ const AttendanceRowItem = memo(function AttendanceRowItem({ candidate, departmen
 });
 
 export default function AcademyAttendancePage() {
-  const { selectedBatch, cacheScope = 'staff' } = useContext(BatchContext);
+  const { selectedBatch, cacheScope = 'staff', canAccessSensitiveFeatures = false } = useContext(BatchContext);
   const selectedBatchId = selectedBatch?.id;
   const [data, setData] = useState({ candidates: [], batches: [], attendance: [], personnel: [], department: '', role: 'STAFF', personnelId: '' });
   const [equipment, setEquipment] = useState({ statuses: [] });
@@ -69,6 +69,9 @@ export default function AcademyAttendancePage() {
   const refreshInFlight = useRef(false);
   const pendingAttendance = useRef(new Map());
   const [pendingAttendanceIds, setPendingAttendanceIds] = useState(() => new Set());
+  const [fastTrackOpen, setFastTrackOpen] = useState(false);
+  const [fastTrackSaving, setFastTrackSaving] = useState(false);
+  const [fastTrackForm, setFastTrackForm] = useState({ name: '', cid: '', gender: '', department: '', note: '' });
   useEffect(() => {
     if (!toast) return undefined;
     const timer = window.setTimeout(() => setToast(''), 4500);
@@ -420,10 +423,52 @@ export default function AcademyAttendancePage() {
   }, [candidateRows]);
   const activeDepartmentCount = departments.filter(([department]) => department !== 'Belum ditentukan').length;
 
+  const openFastTrackForm = () => {
+    setFastTrackForm({ name: '', cid: '', gender: '', department: data.role === 'STAFF' ? data.department : '', note: '' });
+    setFastTrackOpen(true);
+  };
+
+  const addFastTrackCandidate = async (event) => {
+    event.preventDefault();
+    if (!selectedBatchId || fastTrackSaving) return;
+    setFastTrackSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await fetch('/api/internal/academy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ADD_FAST_TRACK', batchId: selectedBatchId, ...fastTrackForm }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Kandidat Fast Track gagal ditambahkan.');
+      setFastTrackOpen(false);
+      setMessage(`Kandidat ${result.candidate.nama} berhasil ditambahkan melalui Fast Track.`);
+      await refresh();
+    } catch (issue) {
+      setError(issue.message || 'Kandidat Fast Track gagal ditambahkan.');
+    } finally {
+      setFastTrackSaving(false);
+    }
+  };
+
   return <div className="space-y-5">
     {toast && <div role="alert" className="fixed right-4 top-4 z-[60] max-w-sm rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800 shadow-lg">{toast}</div>}
+    {canAccessSensitiveFeatures && fastTrackOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !fastTrackSaving) setFastTrackOpen(false); }}>
+      <form onSubmit={addFastTrackCandidate} className="my-auto w-full max-w-xl space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+        <header><p className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Academy · {selectedBatch?.name || 'Batch aktif'}</p><h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">Tambah Kandidat Fast Track</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-300">Kandidat akan langsung masuk daftar Absensi Academy tanpa mengubah status Review CV atau Interview.</p></header>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block sm:col-span-2"><span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-200">Nama lengkap</span><input required minLength={2} maxLength={100} value={fastTrackForm.name} onChange={(event) => setFastTrackForm((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white" /></label>
+          <label className="block"><span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-200">CID</span><input required maxLength={40} pattern="[A-Za-z0-9]+" value={fastTrackForm.cid} onChange={(event) => setFastTrackForm((current) => ({ ...current, cid: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white" /></label>
+          <label className="block"><span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-200">Gender</span><select required value={fastTrackForm.gender} onChange={(event) => setFastTrackForm((current) => ({ ...current, gender: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white"><option value="">Pilih gender</option><option value="Male">Male</option><option value="Female">Female</option></select></label>
+          {data.role === 'ADMIN' ? <label className="block sm:col-span-2"><span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-200">Departemen (opsional)</span><select value={fastTrackForm.department} onChange={(event) => setFastTrackForm((current) => ({ ...current, department: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white"><option value="">Belum ditentukan</option><option value="LSPD">LSPD</option><option value="LSSD">LSSD</option><option value="SASP">SASP</option><option value="DOC">DOC</option></select></label> : <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">Departemen: <strong>{data.department || 'Memuat departemen…'}</strong></p>}
+        </div>
+        <label className="block"><span className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-200">Catatan Fast Track (opsional)</span><textarea rows="3" maxLength={1000} value={fastTrackForm.note} onChange={(event) => setFastTrackForm((current) => ({ ...current, note: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white" placeholder="Catatan internal bila diperlukan" /></label>
+        <footer className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-700"><button type="button" disabled={fastTrackSaving} onClick={() => setFastTrackOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">Batal</button><button type="submit" disabled={fastTrackSaving || !selectedBatchId} className="rounded-lg bg-emerald-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{fastTrackSaving ? 'Menyimpan…' : 'Tambah ke Academy'}</button></footer>
+      </form>
+    </div>}
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-800">Academy · {selectedBatch?.name || 'Batch belum dipilih'}</p><h2 className="mt-1 text-2xl font-bold text-slate-900">Absensi Kandidat</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Absensi dan pembagian perlengkapan dikelompokkan menurut departemen. Perubahan tersinkron untuk personel lain di batch ini.</p></div><div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold ${realtimeConnected ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}><span className={`h-2.5 w-2.5 rounded-full ${realtimeConnected ? 'animate-pulse bg-emerald-600' : 'bg-amber-500'}`}/>{realtimeConnected ? 'LIVE · tersambung' : 'Sinkronisasi otomatis'}</div></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-800">Academy · {selectedBatch?.name || 'Batch belum dipilih'}</p><h2 className="mt-1 text-2xl font-bold text-slate-900">Absensi Kandidat</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Absensi dan pembagian perlengkapan dikelompokkan menurut departemen. Perubahan tersinkron untuk personel lain di batch ini.</p></div><div className="flex flex-wrap items-center gap-2">{canAccessSensitiveFeatures && <button type="button" disabled={!selectedBatchId || loading} onClick={openFastTrackForm} className="rounded-xl bg-emerald-800 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50">＋ Tambah Fast Track</button>}<div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold ${realtimeConnected ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}><span className={`h-2.5 w-2.5 rounded-full ${realtimeConnected ? 'animate-pulse bg-emerald-600' : 'bg-amber-500'}`}/>{realtimeConnected ? 'LIVE · tersambung' : 'Sinkronisasi otomatis'}</div></div></div>
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Kandidat</small><strong className="mt-1 block text-xl text-slate-900">{data.candidates.length}</strong></div><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Departemen aktif</small><strong className="mt-1 block text-xl text-slate-900">{activeDepartmentCount}</strong></div><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Hadir</small><strong className="mt-1 block text-xl text-emerald-700">{presentCount}</strong></div><div className="rounded-xl border border-slate-100 p-3"><small className="text-xs text-slate-500">Terakhir sinkron</small><strong className="mt-1 block text-sm text-slate-800">{lastSyncedAt ? formatTime(lastSyncedAt) : 'Memuat…'}</strong></div></div>
       {error && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}{message && <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
     </section>

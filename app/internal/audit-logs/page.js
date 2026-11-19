@@ -23,6 +23,7 @@ const ACTION_LABELS = {
   PERSONNEL_UPDATED: 'Personel diperbarui',
   PERSONNEL_DEACTIVATED: 'Personel dinonaktifkan',
   ACADEMY_ATTENDANCE: 'Absensi Academy',
+  FAST_TRACK_CANDIDATE: 'Kandidat Fast Track',
   EQUIPMENT_UPDATE: 'Pembagian perlengkapan',
   BATCH_CREATED: 'Batch dibuat',
   BATCH_UPDATED: 'Jadwal batch diubah',
@@ -167,7 +168,7 @@ export default function AuditLogsPage() {
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
                           log.role_action === 'ADMIN_OVERRIDE' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
                           log.role_action === 'INTERVIEW' ? 'bg-indigo-100 text-indigo-800 border border-indigo-300' :
-                          ['REVIEW_CV', 'ACCESS_ADDED', 'ACCESS_UPDATED', 'ACCESS_ROLE_CHANGED', 'PERSONNEL_ADDED', 'PERSONNEL_UPDATED'].includes(log.role_action) ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                          ['REVIEW_CV', 'ACCESS_ADDED', 'ACCESS_UPDATED', 'ACCESS_ROLE_CHANGED', 'PERSONNEL_ADDED', 'PERSONNEL_UPDATED', 'FAST_TRACK_CANDIDATE'].includes(log.role_action) ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
                           'bg-slate-100 text-slate-700 border border-slate-300'
                         }`}>
                           {ACTION_LABELS[log.role_action] || 'Aktivitas sistem'}

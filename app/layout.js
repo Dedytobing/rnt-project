@@ -3,7 +3,10 @@ import Script from 'next/script';
 import ThemeToggle from './theme-toggle';
 
 export const metadata = {
-  title: 'RNT | Recruitment and Training',
+  title: {
+    template: 'RNT | %s',
+    default: 'RNT | Recruitment and Training',
+  },
   description: 'Portal rekrutmen dan manajemen personel RNT.',
 };
 

@@ -43,7 +43,7 @@ const recruitmentStages = [
 ];
 
 function getRecruitmentStage(candidate) {
-  if (candidate.status_interview === 'Passed') return 'passed';
+  if (candidate.is_fast_track || candidate.status_interview === 'Passed') return 'passed';
   if (candidate.status_interview === 'Failed' || candidate.status_cv === 'Rejected') return 'rejected';
   if (candidate.status_cv === 'Pending' || candidate.status_interview === 'Pending') return 'pending';
   if (candidate.status_cv === 'Interview') return 'interview';
@@ -156,7 +156,8 @@ export default function InternalDashboard() {
     const statusCv = c.status_cv || 'NEW';
     const matchStatus = 
       filterStatus === 'ALL' ? true :
-      filterStatus === 'NEW' ? (!c.status_cv || c.status_cv === '') :
+      filterStatus === 'NEW' ? (!c.is_fast_track && (!c.status_cv || c.status_cv === '')) :
+      filterStatus === 'Interview' ? (c.is_fast_track || c.status_cv === 'Interview') :
       statusCv === filterStatus;
 
     const matchInterview = filterInterview === 'ALL' ? true :
@@ -189,17 +190,18 @@ export default function InternalDashboard() {
 
   // Hitung statistik untuk cards & chart
   const total = candidates.length;
-  const countNew = candidates.filter(c => !c.status_cv || c.status_cv === '').length;
+  const countNew = candidates.filter(c => !c.is_fast_track && (!c.status_cv || c.status_cv === '')).length;
   const countPending = candidates.filter(c => c.status_cv === 'Pending').length;
   const countInterviewWaiting = candidates.filter(c => c.status_cv === 'Interview' && !c.status_interview).length;
   const countInterviewPending = candidates.filter(c => c.status_interview === 'Pending').length;
-  const countInterviewPassed = candidates.filter(c => c.status_interview === 'Passed').length;
+  const countInterviewPassed = candidates.filter(c => c.is_fast_track || c.status_interview === 'Passed').length;
   const countNeedsCvReview = countNew + countPending;
   const countNeedsInterview = countInterviewWaiting + countInterviewPending;
 
   const countLssd = candidates.filter(c => c.mapping_dept === 'LSSD').length;
   const countLspd = candidates.filter(c => c.mapping_dept === 'LSPD').length;
-  const countPlaced = countLssd + countLspd;
+  const countDoc = candidates.filter(c => c.mapping_dept === 'DOC').length;
+  const countPlaced = countLssd + countLspd + countDoc;
   const countPassedAwaitingPlacement = Math.max(0, countInterviewPassed - countPlaced);
   const recruitmentStageCounts = recruitmentStages.map(stage =>
     candidates.filter(candidate => getRecruitmentStage(candidate) === stage.id).length
@@ -328,7 +330,7 @@ export default function InternalDashboard() {
               <option value="ALL">Semua Status CV</option>
               <option value="NEW">🔵 Antrean Baru</option>
               <option value="Pending">🟡 Pending</option>
-              <option value="Interview">🟣 Lolos Review CV</option>
+              <option value="Interview">Lolos Review CV / Diterima</option>
               <option value="Rejected">🔴 Ditolak CV</option>
             </select>
 
@@ -386,9 +388,9 @@ export default function InternalDashboard() {
                 <tr className="align-middle"><td colSpan="8" className="p-6 text-center align-middle text-slate-400">Tidak ada kandidat yang cocok.</td></tr>
               ) : (
                 paginatedCandidates.map(c => {
-                  const statusDisplay = !c.status_cv ? 'Antrean Baru' : c.status_cv === 'Interview' ? 'Lolos Review CV' : c.status_cv;
+                  const statusDisplay = c.is_fast_track ? 'Terverifikasi' : !c.status_cv ? 'Antrean Baru' : c.status_cv === 'Interview' ? 'Lolos Review CV' : c.status_cv;
                   const mdtStatus = normalizeMdtStatus(c.mdt_check);
-                  const interviewStatusDisplay = c.status_cv !== 'Interview'
+                  const interviewStatusDisplay = c.is_fast_track ? 'Passed' : c.status_cv !== 'Interview'
                     ? 'Belum Interview'
                     : c.status_interview || 'Belum Diputuskan';
                   return (
@@ -397,6 +399,7 @@ export default function InternalDashboard() {
                       <td className="p-3 align-middle text-center text-slate-600">{c.gender || '—'}</td>
                       <td className="p-3 align-middle text-center">
                         <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
+                          c.is_fast_track ? 'bg-indigo-100 text-indigo-800 border border-indigo-300' :
                           c.status_cv === 'Interview' ? 'bg-indigo-100 text-indigo-800 border border-indigo-300' :
                           c.status_cv === 'Pending' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                           c.status_cv === 'Rejected' ? 'bg-rose-100 text-rose-800 border border-rose-300' : 
@@ -414,7 +417,7 @@ export default function InternalDashboard() {
                       </td>
                       <td className="p-3 align-middle text-center">
                         <span className={`dashboard-interview-status whitespace-nowrap rounded-full border px-2 py-1 text-[9px] font-bold ${
-                          c.status_interview === 'Passed' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
+                          c.is_fast_track || c.status_interview === 'Passed' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
                           c.status_interview === 'Failed' ? 'border-rose-200 bg-rose-50 text-rose-700' :
                           c.status_interview === 'Pending' ? 'border-amber-200 bg-amber-50 text-amber-700' :
                           'border-slate-200 bg-slate-50 text-slate-500'
@@ -446,9 +449,9 @@ export default function InternalDashboard() {
           </header>
           <div className={`grid min-h-0 flex-1 gap-3 overflow-hidden ${detailNotes.length >= 3 ? 'md:grid-cols-[1.05fr_0.95fr]' : ''}`}>
             <section className="min-h-0 overflow-hidden pr-1"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Data dan proses</h3><div className="mb-2 grid grid-cols-3 gap-2">
-              <DetailStatus label="Status CV" value={!detailCandidate.status_cv ? 'Antrean Baru' : detailCandidate.status_cv === 'Interview' ? 'Lolos Review CV' : detailCandidate.status_cv} tone={detailCandidate.status_cv === 'Rejected' ? 'red' : detailCandidate.status_cv === 'Pending' ? 'amber' : detailCandidate.status_cv === 'Interview' ? 'indigo' : 'slate'} />
+              <DetailStatus label="Status CV" value={detailCandidate.is_fast_track ? 'Terverifikasi' : !detailCandidate.status_cv ? 'Antrean Baru' : detailCandidate.status_cv === 'Interview' ? 'Lolos Review CV' : detailCandidate.status_cv} tone={detailCandidate.is_fast_track ? 'indigo' : detailCandidate.status_cv === 'Rejected' ? 'red' : detailCandidate.status_cv === 'Pending' ? 'amber' : detailCandidate.status_cv === 'Interview' ? 'indigo' : 'slate'} />
               <DetailStatus label="MDT" value={normalizeMdtStatus(detailCandidate.mdt_check) || 'Belum diperiksa'} tone={normalizeMdtStatus(detailCandidate.mdt_check) === 'Green' ? 'green' : normalizeMdtStatus(detailCandidate.mdt_check) === 'Red' ? 'red' : 'amber'} />
-              <DetailStatus label="Status Interview" value={detailCandidate.status_cv !== 'Interview' ? 'Belum masuk tahap' : detailCandidate.status_interview || 'Belum ada keputusan'} tone={detailCandidate.status_interview === 'Passed' ? 'green' : detailCandidate.status_interview === 'Failed' ? 'red' : detailCandidate.status_interview === 'Pending' ? 'amber' : 'slate'} />
+              <DetailStatus label="Status Interview" value={detailCandidate.is_fast_track ? 'Passed' : detailCandidate.status_cv !== 'Interview' ? 'Belum masuk tahap' : detailCandidate.status_interview || 'Belum ada keputusan'} tone={detailCandidate.is_fast_track || detailCandidate.status_interview === 'Passed' ? 'green' : detailCandidate.status_interview === 'Failed' ? 'red' : detailCandidate.status_interview === 'Pending' ? 'amber' : 'slate'} />
             </div><div className="grid grid-cols-2 gap-2">
               <DetailField label="CID" value={detailCandidate.cid || 'Belum dicatat'} />
               <DetailField label="Status CID" value={detailCandidate.cid_status || (detailCandidate.cid ? 'Aktif' : 'Belum tersedia')} />

@@ -26,7 +26,7 @@ export async function GET(request) {
     const statusResult = await db.from('interview_equipment_status').select('candidate_id,batch_id,key_status,badge_status,updated_by,updated_at').eq('batch_id', batchId.data);
     if (statusResult.error) throw statusResult.error;
     const [{ data: candidates, error: candidatesError }, personResult] = await Promise.all([
-      db.from('candidates').select('id,mapping_dept,status_cv').eq('batch_id', batchId.data).eq('status_interview', 'Passed').is('deleted_at', null),
+      db.from('candidates').select('id,mapping_dept,status_cv,status_interview,is_fast_track').eq('batch_id', batchId.data).is('deleted_at', null),
       session.role === 'STAFF'
         ? db.from('rnt_personnel').select('department').eq('id', session.personnelId).eq('is_active', true).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
@@ -34,7 +34,9 @@ export async function GET(request) {
     if (candidatesError || personResult.error) throw candidatesError || personResult.error;
     const allowedIds = new Set((candidates || []).filter((candidate) => {
       const cvStatus = String(candidate.status_cv || '').trim().toLowerCase();
-      return cvStatus && !['pending', 'rejected', 'belum direview', 'belum di-review'].includes(cvStatus) && (session.role !== 'STAFF' || (personResult.data?.department && candidate.mapping_dept === personResult.data.department));
+      const eligibleReview = candidate.is_fast_track || (cvStatus && !['pending', 'rejected', 'belum direview', 'belum di-review'].includes(cvStatus));
+      const eligibleInterview = candidate.is_fast_track || candidate.status_interview === 'Passed';
+      return eligibleReview && eligibleInterview && (session.role !== 'STAFF' || (personResult.data?.department && candidate.mapping_dept === personResult.data.department));
     }).map((candidate) => String(candidate.id)));
     const statuses = (statusResult.data || []).filter((row) => allowedIds.has(String(row.candidate_id)));
     return json({ success: true, statuses });
@@ -60,20 +62,20 @@ export async function POST(request) {
     if (!access.allowed && !(item === 'KIT' && status === 'PENDING')) return json({ success: false, error: access.message }, access.status);
     if (session.role === 'STAFF') {
       const [{ data: candidate, error: candidateError }, { data: person, error: personError }] = await Promise.all([
-        db.from('candidates').select('mapping_dept,status_interview,status_cv').eq('id', candidateId).eq('batch_id', batchId).is('deleted_at', null).maybeSingle(),
+        db.from('candidates').select('mapping_dept,status_interview,status_cv,is_fast_track').eq('id', candidateId).eq('batch_id', batchId).is('deleted_at', null).maybeSingle(),
         db.from('rnt_personnel').select('department').eq('id', session.personnelId).eq('is_active', true).maybeSingle(),
       ]);
       if (candidateError || personError) return json({ success: false, error: 'Departemen akses gagal diverifikasi.' }, 503);
       const department = candidate?.mapping_dept;
       const cvStatus = String(candidate?.status_cv || '').trim().toLowerCase();
-      if (!candidate || candidate.status_interview !== 'Passed' || !cvStatus || ['pending', 'rejected', 'belum direview', 'belum di-review'].includes(cvStatus)) return json({ success: false, error: 'Kandidat belum memenuhi syarat Academy.' }, 403);
+      if (!candidate || (!candidate.is_fast_track && (candidate.status_interview !== 'Passed' || !cvStatus || ['pending', 'rejected', 'belum direview', 'belum di-review'].includes(cvStatus)))) return json({ success: false, error: 'Kandidat belum memenuhi syarat Academy.' }, 403);
       if (!person?.department || person.department !== department) return json({ success: false, error: 'Pembagian perlengkapan hanya dapat dikelola oleh personel departemen kandidat.' }, 403);
     }
     if (session.role === 'ADMIN') {
-      const { data: candidate, error: candidateError } = await db.from('candidates').select('mapping_dept,status_interview,status_cv').eq('id', candidateId).eq('batch_id', batchId).is('deleted_at', null).maybeSingle();
+      const { data: candidate, error: candidateError } = await db.from('candidates').select('mapping_dept,status_interview,status_cv,is_fast_track').eq('id', candidateId).eq('batch_id', batchId).is('deleted_at', null).maybeSingle();
       if (candidateError) return json({ success: false, error: 'Kandidat gagal diverifikasi.' }, 503);
       const cvStatus = String(candidate?.status_cv || '').trim().toLowerCase();
-      if (!candidate || candidate.status_interview !== 'Passed' || !cvStatus || ['pending', 'rejected', 'belum direview', 'belum di-review'].includes(cvStatus)) return json({ success: false, error: 'Kandidat belum memenuhi syarat Academy.' }, 403);
+      if (!candidate || (!candidate.is_fast_track && (candidate.status_interview !== 'Passed' || !cvStatus || ['pending', 'rejected', 'belum direview', 'belum di-review'].includes(cvStatus)))) return json({ success: false, error: 'Kandidat belum memenuhi syarat Academy.' }, 403);
     }
     const { error } = await db.rpc('update_interview_equipment', {
       p_candidate_id: candidateId,

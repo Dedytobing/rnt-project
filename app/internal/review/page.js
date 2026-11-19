@@ -255,7 +255,7 @@ export default function ReviewPage() {
   }, [selectedBatch?.id, cacheScope]);
 
   const activeReviewCandidates = candidates.filter((candidate) =>
-    !['Accepted', 'Rejected'].includes(candidate.status_cv) && !candidate.status_interview
+    !candidate.is_fast_track && !['Accepted', 'Rejected'].includes(candidate.status_cv) && !candidate.status_interview
   );
   const activeReviewIds = new Set(activeReviewCandidates.map((candidate) => candidate.id));
   const displayedCandidates = candidates.filter(c => {

@@ -151,6 +151,7 @@ function InternalLayoutContent({ children }) {
   const [officerPosition, setOfficerPosition] = useState('');
   const [officerDepartment, setOfficerDepartment] = useState('');
   const [userRole, setUserRole] = useState('STAFF');
+  const [canAccessSensitiveFeatures, setCanAccessSensitiveFeatures] = useState(false);
   const [inputName, setInputName] = useState('');
   const [inputRank, setInputRank] = useState('');
   const [inputPosition, setInputPosition] = useState('');
@@ -230,6 +231,22 @@ function InternalLayoutContent({ children }) {
   };
   const routeSection = pathname.split('/')[3] || '';
   const [pageTitle, pageSubtitle] = pageMeta[pathname] || pageMeta[`/internal/${routeSection}`] || ['Portal personel', 'Sistem manajemen rekrutmen RNT Project'];
+  const tabTitleBySection = {
+    dashboard: 'Dashboard',
+    review: 'Review CV',
+    interview: 'Interview Panel',
+    academy: 'Absensi Academy',
+    absensi: 'Absensi Academy',
+    bonus: 'Kalkulator Bonus',
+    'audit-log': 'Audit Log',
+    'audit-logs': 'Audit Log',
+    management: 'Manajemen',
+  };
+  const currentSection = pathname.split('/').filter(Boolean).at(-1) || '';
+  useEffect(() => {
+    const pageTitleForTab = tabTitleBySection[currentSection];
+    document.title = pageTitleForTab ? `RNT | ${pageTitleForTab}` : 'RNT | Recruitment and Training';
+  }, [currentSection]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
@@ -260,6 +277,7 @@ function InternalLayoutContent({ children }) {
         if (data.authenticated) {
           setOfficerName(data.officerName);
           setUserRole(data.userRole);
+          setCanAccessSensitiveFeatures(Boolean(data.canAccessSensitiveFeatures));
           setOfficerRank(data.officerRank || '');
           setOfficerPosition(data.officerPosition || '');
           setOfficerDepartment(data.officerDepartment || '');
@@ -299,6 +317,19 @@ function InternalLayoutContent({ children }) {
         if (active) setSessionReady(true);
       });
     return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const syncSensitiveAccess = () => {
+      fetch('/api/internal/session', { cache: 'no-store' })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.authenticated) setCanAccessSensitiveFeatures(Boolean(data.canAccessSensitiveFeatures));
+        })
+        .catch(() => {});
+    };
+    window.addEventListener('rnt-sensitive-access-updated', syncSensitiveAccess);
+    return () => window.removeEventListener('rnt-sensitive-access-updated', syncSensitiveAccess);
   }, []);
 
   useEffect(() => {
@@ -376,6 +407,7 @@ function InternalLayoutContent({ children }) {
   const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) || null;
   const serverClockDisplay = serverClockNow === null ? null : formatSystemServerTime(serverClockNow);
   const cacheScope = `${isAuth ? 'staff' : 'guest'}:${userRole}:${officerDepartment}:${officerName}`;
+  const canAccessSensitiveFeaturesForSession = isAuth && canAccessSensitiveFeatures;
 
   const chooseBatch = (batchId) => {
     const batch = batches.find((item) => item.id === batchId);
@@ -541,6 +573,7 @@ function InternalLayoutContent({ children }) {
       sessionStorage.setItem('officer_role', data.userRole);
       setOfficerName(data.officerName);
       setUserRole(data.userRole);
+      setCanAccessSensitiveFeatures(Boolean(data.canAccessSensitiveFeatures));
       setOfficerRank(data.officerRank || inputRank);
       setOfficerPosition(data.officerPosition || inputPosition);
       setOfficerDepartment(data.officerDepartment || inputDepartment);
@@ -593,6 +626,7 @@ function InternalLayoutContent({ children }) {
     setShowBatchPicker(true);
     setBatches([]);
     setIsAuth(false);
+    setCanAccessSensitiveFeatures(false);
   };
 
   if (!sessionReady) {
@@ -885,7 +919,7 @@ function InternalLayoutContent({ children }) {
   }
 
   return (
-    <BatchContext.Provider value={{ selectedBatch, cacheScope }}>
+    <BatchContext.Provider value={{ selectedBatch, cacheScope, canAccessSensitiveFeatures: canAccessSensitiveFeaturesForSession, userRole }}>
     <div className="min-h-screen bg-slate-100 flex staff-workspace">
       <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between p-6 shrink-0 staff-sidebar">
         <div className="space-y-6">
@@ -906,10 +940,10 @@ function InternalLayoutContent({ children }) {
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/review` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'review' || pathname === '/internal/review' ? 'active' : ''}`}><span>⌕</span>Review CV</Link>
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/interview` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'interview' || pathname === '/internal/interview' ? 'active' : ''}`}><span>◷</span>Interview panel</Link>
             <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/absensi` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'absensi' || routeSection === 'academy' || pathname === '/internal/academy' ? 'active' : ''}`}><span>✓</span>Absensi Academy</Link>
-            {userRole === 'ADMIN' && <>
-              <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/bonus` : '/internal/bonus'} className={`staff-nav-link ${routeSection === 'bonus' || pathname === '/internal/bonus' ? 'active' : ''}`}><span>$</span>Kalkulator Bonus<span className="nav-admin-tag">RNT</span></Link>
+              {canAccessSensitiveFeaturesForSession && <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/bonus` : '/internal/bonus'} className={`staff-nav-link ${routeSection === 'bonus' || pathname === '/internal/bonus' ? 'active' : ''}`}><span>$</span>Kalkulator Bonus<span className="nav-admin-tag">RNT</span></Link>}
+              {(userRole === 'ADMIN' || canAccessSensitiveFeaturesForSession) && <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/management` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'management' || pathname === '/internal/management' ? 'active' : ''}`}><span>⚙</span>Manajemen<span className="nav-admin-tag">RNT</span></Link>}
+              {userRole === 'ADMIN' && <>
               <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/audit-log` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'audit-log' || pathname === '/internal/audit-logs' ? 'active' : ''}`}><span>≡</span>Audit log<span className="nav-admin-tag">RNT</span></Link>
-              <Link href={selectedBatch ? `/internal/${slugForBatch(selectedBatch, batches)}/management` : '/internal/select-batch'} className={`staff-nav-link ${routeSection === 'management' || pathname === '/internal/management' ? 'active' : ''}`}><span>⚙</span>Manajemen<span className="nav-admin-tag">RNT</span></Link>
             </>}
           </nav>
         </div>
@@ -935,7 +969,7 @@ function InternalLayoutContent({ children }) {
           <div><div className="staff-breadcrumb">RNT PROJECT <span>/</span> PERSONNEL</div><h1>{pageTitle}</h1><p>{pageSubtitle}</p></div>
           <div className="staff-top-actions inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200/60 bg-slate-100/80 p-1.5 dark:border-emerald-800/40 dark:bg-emerald-950/40"><div className="server-time-widget inline-flex min-w-0 items-center gap-2 px-2" aria-label="Waktu server sistem, zona waktu WIB" title="Waktu server sistem · Asia/Jakarta"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-emerald-300"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" /><path d="M12 7v5l3.2 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg><span className="font-mono text-[11px] font-medium tabular-nums text-slate-700 dark:text-emerald-300">{serverClockDisplay?.time || '--:--:--'}</span><span aria-hidden="true" className="text-[10px] text-slate-400 dark:text-emerald-800/80">·</span><span className="server-time-date whitespace-nowrap text-[9px] text-slate-500 dark:text-emerald-300/80">{serverClockDisplay?.date || 'Menyinkronkan…'}</span></div><span className="staff-live"><i /> SISTEM AKTIF</span>{selectedBatch && <button type="button" aria-label={`Ganti batch aktif, saat ini ${selectedBatch.name}`} onClick={() => setShowBatchPicker(true)} className="staff-batch-switcher inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-slate-200/60 bg-white/60 px-2.5 py-1 text-[10px] font-medium text-slate-700 hover:bg-white dark:border-emerald-800/40 dark:bg-emerald-950/20 dark:text-emerald-200 dark:hover:bg-emerald-900/40"><span className="text-slate-500 dark:text-emerald-300/70">Batch:</span><span className="truncate">{selectedBatch.name}</span><svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-emerald-300/70"><path d="m5.5 7.5 4.5 4 4.5-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></button>}<Link href={`/candidate?source=internal&returnTo=${encodeURIComponent(pathname)}`} className="staff-new-candidate rounded-md px-2.5 py-1.5 text-[10px]"><span>＋</span> Kandidat baru</Link></div>
         </header>
-        <div className="staff-content">{(routeSection === 'bonus' || pathname === '/internal/bonus') && userRole !== 'ADMIN' ? <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-5 text-sm font-semibold text-rose-800">Kalkulator Bonus hanya dapat diakses Admin Team RNT.</div> : children}</div>
+        <div className="staff-content">{(routeSection === 'bonus' || pathname === '/internal/bonus') && !canAccessSensitiveFeaturesForSession ? <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-5 text-sm font-semibold text-rose-800">Akses Ditolak (403). Kalkulator Bonus hanya tersedia untuk pengguna yang terdaftar pada whitelist fitur sensitif.</div> : children}</div>
       </main>
     </div>
     </BatchContext.Provider>

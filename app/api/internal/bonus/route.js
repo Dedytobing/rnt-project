@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
+import { isSensitiveFeatureAllowed } from '@/lib/sensitive-feature-access';
 import { splitStaffNameEntries } from '@/lib/staff-name-utils';
 
 const TRAINER_RATE = 150_000;
@@ -126,7 +127,7 @@ function resolveDashboardStaffName(name, personnelByName, personnelByFirstName, 
 export async function GET(request) {
   const session = getInternalSession(request);
   if (!session) return response({ success: false, error: 'Sesi personel diperlukan.' }, 401);
-  if (session.role !== 'ADMIN') return response({ success: false, error: 'Halaman ini khusus Admin Team RNT.' }, 403);
+  if (!await isSensitiveFeatureAllowed(session)) return response({ success: false, error: 'Akses Kalkulator Bonus ditolak.' }, 403);
 
   const batchId = z.uuid().safeParse(new URL(request.url).searchParams.get('batch_id'));
   if (!batchId.success) return response({ success: false, error: 'Pilih batch untuk menghitung bonus.' }, 400);
@@ -138,7 +139,7 @@ export async function GET(request) {
       db.from('rnt_personnel').select('id,full_name,normalized_name,position,is_active').order('full_name'),
       db.from('rnt_personnel_name_whitelist').select('id,full_name,normalized_name').eq('is_active', true).order('full_name'),
       db.from('academy_batch_trainers').select('whitelist_id').eq('batch_id', batchId.data),
-      db.from('candidates').select('id,interviewer_name,assist_name').eq('batch_id', batchId.data).is('deleted_at', null),
+      db.from('candidates').select('id,interviewer_name,assist_name,is_fast_track').eq('batch_id', batchId.data).is('deleted_at', null),
       db.from('personnel_bonus_payments').select('personnel_id,normalized_personnel_name,bonus_type,is_paid').eq('batch_id', batchId.data),
     ]);
     if (paymentsResult.error) {
@@ -205,6 +206,7 @@ export async function GET(request) {
     const interviewerCounts = new Map();
     const unmappedInterviewerNames = new Set();
     for (const candidate of candidatesResult.data || []) {
+      if (candidate.is_fast_track) continue;
       const names = [
         ...dashboardStaffNameParts(candidate.interviewer_name),
         ...dashboardStaffNameParts(candidate.assist_name),
@@ -256,7 +258,7 @@ export async function PATCH(request) {
   if (origin && origin !== new URL(request.url).origin) return response({ success: false, error: 'Asal permintaan tidak valid.' }, 403);
   const session = getInternalSession(request);
   if (!session) return response({ success: false, error: 'Sesi personel diperlukan.' }, 401);
-  if (session.role !== 'ADMIN') return response({ success: false, error: 'Aksi ini hanya dapat dilakukan Admin Team RNT.' }, 403);
+  if (!await isSensitiveFeatureAllowed(session)) return response({ success: false, error: 'Akses Kalkulator Bonus ditolak.' }, 403);
 
   let body;
   try { body = await request.json(); } catch { return response({ success: false, error: 'Format permintaan tidak valid.' }, 400); }

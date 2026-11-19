@@ -25,6 +25,10 @@ function formatRegistrationDeadline(value) {
 }
 
 export default function CandidatePage() {
+  useEffect(() => {
+    document.title = 'RNT | Pendaftaran Kandidat';
+  }, []);
+
   const [candForm, setCandForm] = useState({ cid: '', nama: '', gender: '', linkCv: '' });
   const [loading, setLoading] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);

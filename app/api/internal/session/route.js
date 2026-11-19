@@ -16,6 +16,7 @@ import { enforceRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { pinSessionSchema, readValidatedJson } from '@/lib/validation';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { createHmac } from 'node:crypto';
+import { isSensitiveFeatureAllowed } from '@/lib/sensitive-feature-access';
 
 function requestIp(request) {
   return request.headers.get('x-real-ip') || request.headers.get('cf-connecting-ip') || 'unknown';
@@ -85,6 +86,7 @@ export async function GET(request) {
     const sessionValid = Boolean(profile && expiresAt > Math.floor(Date.now() / 1000));
     const authenticated = sessionValid && !manualLogout;
     const pinVerified = sessionValid && manualLogout;
+    const canAccessSensitiveFeatures = authenticated ? await isSensitiveFeatureAllowed(profile) : false;
     const response = noStore(authenticated ? {
       authenticated: true,
       pinVerified: false,
@@ -93,6 +95,7 @@ export async function GET(request) {
       officerRank: profile.rank,
       officerPosition: profile.position || '',
       officerDepartment: profile.department,
+      canAccessSensitiveFeatures,
       expiresAt,
     } : pinVerified ? {
       authenticated: false,
@@ -293,6 +296,7 @@ export async function POST(request) {
     officerRank: rank,
     officerPosition: position,
     officerDepartment: department,
+    canAccessSensitiveFeatures: await isSensitiveFeatureAllowed(personnel.full_name),
   });
   response.cookies.set(INTERNAL_SESSION_COOKIE, createInternalSessionToken({
     name: personnel.full_name, role, rank, position, department, personnelId: personnel.id, expiresAt,
