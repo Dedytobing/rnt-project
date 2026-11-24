@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getInternalSession } from '@/lib/internal-session';
+import { getVerifiedInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
 import { getBatchStatus } from '@/lib/batch-status';
 import { z } from 'zod';
@@ -20,8 +20,8 @@ function rejectInvalidOrigin(request) {
   return origin && origin !== new URL(request.url).origin;
 }
 
-function adminSession(request) {
-  const session = getInternalSession(request);
+async function adminSession(request) {
+  const session = await getVerifiedInternalSession(request);
   if (!session) return { response: NextResponse.json({ success: false, error: 'Sesi personel diperlukan.' }, { status: 401 }) };
   if (session.role !== 'ADMIN') return { response: NextResponse.json({ success: false, error: 'Aksi ini hanya dapat dilakukan Admin RNT.' }, { status: 403 }) };
   return { session };
@@ -60,7 +60,7 @@ async function readBatchInput(request) {
 }
 
 export async function GET(request) {
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return NextResponse.json({ success: false, error: 'Sesi personel diperlukan.' }, { status: 401 });
 
   try {
@@ -101,7 +101,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   if (rejectInvalidOrigin(request)) return NextResponse.json({ success: false, error: 'Asal permintaan tidak valid.' }, { status: 403 });
-  const { session, response } = adminSession(request);
+  const { session, response } = await adminSession(request);
   if (response) return response;
   const { value, response: inputError } = await readBatchInput(request);
   if (inputError) return inputError;
@@ -120,7 +120,7 @@ export async function POST(request) {
 
 export async function PATCH(request) {
   if (rejectInvalidOrigin(request)) return NextResponse.json({ success: false, error: 'Asal permintaan tidak valid.' }, { status: 403 });
-  const { session, response } = adminSession(request);
+  const { session, response } = await adminSession(request);
   if (response) return response;
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ success: false, error: 'Format permintaan tidak valid.' }, { status: 400 }); }
@@ -146,7 +146,7 @@ export async function PATCH(request) {
 
 export async function DELETE(request) {
   if (rejectInvalidOrigin(request)) return NextResponse.json({ success: false, error: 'Asal permintaan tidak valid.' }, { status: 403 });
-  const { session, response } = adminSession(request);
+  const { session, response } = await adminSession(request);
   if (response) return response;
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ success: false, error: 'Format permintaan tidak valid.' }, { status: 400 }); }

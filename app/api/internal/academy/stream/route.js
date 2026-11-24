@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getInternalSession } from '@/lib/internal-session';
+import { getVerifiedInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
 import { isStageWindowOpen } from '@/lib/stage-access';
 
 export async function GET(request) {
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return NextResponse.json({ success: false, error: 'Sesi personel diperlukan.' }, { status: 401 });
   const origin = request.headers.get('origin');
   if (origin && origin !== new URL(request.url).origin) return NextResponse.json({ success: false, error: 'Asal permintaan tidak valid.' }, { status: 403 });
@@ -25,12 +25,15 @@ export async function GET(request) {
   const encoder = new TextEncoder();
   let channel;
   let heartbeat;
+  let accessCheck;
+  let checkingAccess = false;
   let closed = false;
   let controllerRef;
   const cleanup = () => {
     if (closed) return;
     closed = true;
     if (heartbeat) clearInterval(heartbeat);
+    if (accessCheck) clearInterval(accessCheck);
     request.signal.removeEventListener('abort', cleanup);
     if (channel) db.removeChannel(channel).catch(() => {});
     try { controllerRef?.close(); } catch {}
@@ -64,6 +67,18 @@ export async function GET(request) {
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') send('realtime_unavailable');
         });
       heartbeat = setInterval(() => send('keepalive'), 20000);
+      accessCheck = setInterval(async () => {
+        if (checkingAccess || closed) return;
+        checkingAccess = true;
+        try {
+          if (!await getVerifiedInternalSession(request)) {
+            send('access_revoked');
+            cleanup();
+          }
+        } finally {
+          checkingAccess = false;
+        }
+      }, 10000);
       request.signal.addEventListener('abort', cleanup, { once: true });
     },
     cancel: cleanup,

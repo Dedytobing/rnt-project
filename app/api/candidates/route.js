@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { appendReviewerName } from '@/lib/reviewers';
 import { isCandidateServiceConfigured, registerCandidate } from '@/lib/candidate-registration';
-import { getInternalSession } from '@/lib/internal-session';
+import { getVerifiedInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient, createServiceRoleClient } from '@/lib/supabase-server';
 import { candidateActionSchema, candidateQuerySchema, readValidatedJson } from '@/lib/validation';
 import { enforceRateLimit, rateLimitResponse } from '@/lib/rate-limit';
@@ -34,7 +34,7 @@ function logCandidateApiError(stage, error, context = {}) {
 // GET: Ambil Data Kandidat / Log Spesifik Kandidat
 export async function GET(request) {
   try {
-    const session = getInternalSession(request);
+    const session = await getVerifiedInternalSession(request);
     if (!session) {
       return NextResponse.json({ success: false, error: 'Sesi staff diperlukan.' }, { status: 401 });
     }
@@ -147,7 +147,7 @@ export async function GET(request) {
 // POST: Aksi Update & Registrasi
 export async function POST(request) {
   try {
-    const internalSession = getInternalSession(request);
+    const internalSession = await getVerifiedInternalSession(request);
     if (!internalSession) {
       const requestLimited = await enforceRateLimit(request, {
         namespace: 'candidate-api',
@@ -229,7 +229,7 @@ export async function POST(request) {
     if (origin && origin !== new URL(request.url).origin) {
       return NextResponse.json({ success: false, error: 'Asal permintaan tidak valid.' }, { status: 403 });
     }
-    const session = getInternalSession(request);
+    const session = await getVerifiedInternalSession(request);
     if (!session) return NextResponse.json({ success: false, error: 'Sesi staff diperlukan.' }, { status: 401 });
     const supabase = createInternalDataClient(session);
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { unstable_rethrow } from 'next/navigation';
-import { getInternalSession } from '@/lib/internal-session';
+import { getVerifiedInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
 import { auditQuerySchema } from '@/lib/validation';
 
@@ -68,7 +68,7 @@ export async function GET(request) {
   try {
     const query = auditQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams.entries()));
     if (!query.success) return NextResponse.json({ success: false, error: 'Filter permintaan tidak valid.' }, { status: 400 });
-    const session = getInternalSession(request);
+    const session = await getVerifiedInternalSession(request);
     if (session?.role !== 'ADMIN') {
       return NextResponse.json(
         { success: false, error: 'Audit log global hanya dapat diakses Team RED.' },

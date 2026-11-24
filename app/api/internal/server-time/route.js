@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getInternalSession } from '@/lib/internal-session';
+import { getVerifiedInternalSession } from '@/lib/internal-session';
 
 export async function GET(request) {
-  if (!getInternalSession(request)) {
+  if (!await getVerifiedInternalSession(request)) {
     return NextResponse.json({ success: false, error: 'Sesi personel diperlukan.' }, { status: 401 });
   }
 

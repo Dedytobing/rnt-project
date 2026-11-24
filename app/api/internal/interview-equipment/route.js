@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getInternalSession } from '@/lib/internal-session';
+import { getVerifiedInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
 import { checkCandidateStageWindow } from '@/lib/stage-access';
 
@@ -17,7 +17,7 @@ function json(body, status = 200) {
 }
 
 export async function GET(request) {
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return json({ success: false, error: 'Sesi personel diperlukan.' }, 401);
   const batchId = uuidSchema.safeParse(new URL(request.url).searchParams.get('batch_id'));
   if (!batchId.success) return json({ success: false, error: 'Batch tidak valid.' }, 400);
@@ -49,7 +49,7 @@ export async function GET(request) {
 export async function POST(request) {
   const origin = request.headers.get('origin');
   if (origin && origin !== new URL(request.url).origin) return json({ success: false, error: 'Asal permintaan tidak valid.' }, 403);
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return json({ success: false, error: 'Sesi personel diperlukan.' }, 401);
   let body;
   try { body = await request.json(); } catch { return json({ success: false, error: 'Format permintaan tidak valid.' }, 400); }

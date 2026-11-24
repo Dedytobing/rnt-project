@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { hasInternalPinConfig, verifyInternalPin } from '@/lib/internal-pin';
 import {
-  browserSessionCookieOptions,
   createInternalSessionToken,
   createRememberedPinToken,
-  getInternalSession,
+  getVerifiedInternalSession,
   hasSessionSecret,
   INTERNAL_SESSION_COOKIE,
   MANUAL_LOGOUT_COOKIE,
@@ -52,7 +51,7 @@ function isSameOrigin(request) {
 }
 
 export async function GET(request) {
-  const currentSession = getInternalSession(request);
+  const currentSession = await getVerifiedInternalSession(request);
   const remembered = readRememberedPinToken(request);
   const manualLogout = request.cookies?.get(MANUAL_LOGOUT_COOKIE)?.value === '1';
   let profile = manualLogout ? null : currentSession || null;
@@ -108,8 +107,7 @@ export async function GET(request) {
       expiresAt,
     } : { authenticated: false, pinVerified: false });
     if (authenticated) {
-      // Browser session cookies can disappear when a browser is reopened. Restore a
-      // valid 24-hour remembered session without turning it into a logout lock.
+      // Persist the signed session in the browser until its seven-day expiry.
       response.cookies.set(INTERNAL_SESSION_COOKIE, createInternalSessionToken({
         name: profile.name,
         role: profile.role,
@@ -118,7 +116,7 @@ export async function GET(request) {
         department: profile.department,
         personnelId: profile.personnelId,
         expiresAt,
-      }), browserSessionCookieOptions());
+      }), sessionCookieOptions(expiresAt - Math.floor(Date.now() / 1000)));
     } else {
       response.cookies.set(INTERNAL_SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
     }
@@ -279,7 +277,7 @@ export async function POST(request) {
       personnel_id: personnel.id, personnel_name: personnel.full_name, role,
       event: resumesVerifiedSession ? 'SESSION_RESUMED' : 'LOGIN_SUCCESS',
       action_details: resumesVerifiedSession
-        ? 'Melanjutkan sesi dengan verifikasi PIN 24 jam yang masih aktif.'
+        ? 'Melanjutkan sesi dengan verifikasi PIN 7 hari yang masih aktif.'
         : `Login berhasil sebagai ${role === 'ADMIN' ? 'Admin' : 'Staff'}.`,
       ip_hash: ipHash,
     });
@@ -288,7 +286,7 @@ export async function POST(request) {
     console.error('Personnel login audit failed:', error);
     return noStore({ success: false, error: 'Login tidak dapat dicatat. Coba lagi.' }, 503);
   }
-  const expiresAt = resumesVerifiedSession ? rememberedPin.expiresAt : Math.floor(Date.now() / 1000) + 60 * 60 * 24;
+  const expiresAt = resumesVerifiedSession ? rememberedPin.expiresAt : Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
   const response = noStore({
     success: true,
     officerName: personnel.full_name,
@@ -300,7 +298,7 @@ export async function POST(request) {
   });
   response.cookies.set(INTERNAL_SESSION_COOKIE, createInternalSessionToken({
     name: personnel.full_name, role, rank, position, department, personnelId: personnel.id, expiresAt,
-  }), browserSessionCookieOptions());
+  }), sessionCookieOptions(expiresAt - Math.floor(Date.now() / 1000)));
   response.cookies.set(REMEMBERED_PIN_COOKIE, createRememberedPinToken({
     personnelId: personnel.id,
     role,
@@ -312,7 +310,7 @@ export async function POST(request) {
 
 export async function DELETE(request) {
   if (!isSameOrigin(request)) return noStore({ success: false, error: 'Asal permintaan tidak valid.' }, 403);
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (session) {
     try {
       const db = createServiceRoleClient();

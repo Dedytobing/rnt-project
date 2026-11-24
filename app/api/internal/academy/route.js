@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getInternalSession } from '@/lib/internal-session';
+import { getVerifiedInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
 import { checkCandidateStageWindow, isStageWindowOpen } from '@/lib/stage-access';
 import { isSensitiveFeatureAllowed } from '@/lib/sensitive-feature-access';
 import { z } from 'zod';
 
 export async function GET(request) {
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return NextResponse.json({ success:false,error:'Sesi personel diperlukan.' },{status:401});
   const batchId = new URL(request.url).searchParams.get('batch_id');
   if (!batchId) return NextResponse.json({ success:false,error:'Batch belum dipilih.' },{status:400});
@@ -107,7 +107,7 @@ async function addFastTrackCandidate(db, session, values) {
 }
 
 export async function POST(request) {
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return NextResponse.json({ success:false,error:'Sesi personel diperlukan.' },{status:401});
   if (!['STAFF', 'ADMIN'].includes(session.role)) return NextResponse.json({ success:false,error:'Sesi staff atau admin diperlukan.' },{status:403});
   const origin = request.headers.get('origin');

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getInternalSession } from '@/lib/internal-session';
+import { getVerifiedInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
 import { isSensitiveFeatureAllowed } from '@/lib/sensitive-feature-access';
 import { splitStaffNameEntries } from '@/lib/staff-name-utils';
@@ -125,7 +125,7 @@ function resolveDashboardStaffName(name, personnelByName, personnelByFirstName, 
 }
 
 export async function GET(request) {
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return response({ success: false, error: 'Sesi personel diperlukan.' }, 401);
   if (!await isSensitiveFeatureAllowed(session)) return response({ success: false, error: 'Akses Kalkulator Bonus ditolak.' }, 403);
 
@@ -256,7 +256,7 @@ export async function GET(request) {
 export async function PATCH(request) {
   const origin = request.headers.get('origin');
   if (origin && origin !== new URL(request.url).origin) return response({ success: false, error: 'Asal permintaan tidak valid.' }, 403);
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return response({ success: false, error: 'Sesi personel diperlukan.' }, 401);
   if (!await isSensitiveFeatureAllowed(session)) return response({ success: false, error: 'Akses Kalkulator Bonus ditolak.' }, 403);
 

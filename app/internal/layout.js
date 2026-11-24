@@ -650,7 +650,7 @@ function InternalLayoutContent({ children }) {
           <div className="staff-login-heading">
             <div>
               <h2 className="text-xl font-bold text-white">RNT Internal Portal</h2>
-              <p className="text-xs text-slate-400 mt-1">{pinVerified ? 'Profil tersimpan dan verifikasi PIN masih aktif selama 24 jam.' : 'Lengkapi identitas dinas, peran, dan PIN portal internal.'}</p>
+              <p className="text-xs text-slate-400 mt-1">{pinVerified ? 'Profil tersimpan dan verifikasi PIN masih aktif selama 7 hari.' : 'Lengkapi identitas dinas, peran, dan PIN portal internal.'}</p>
             </div>
           </div>
 

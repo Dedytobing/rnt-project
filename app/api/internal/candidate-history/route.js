@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getInternalSession } from '@/lib/internal-session';
+import { getVerifiedInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
 import { checkCandidateStageWindow } from '@/lib/stage-access';
 import { z } from 'zod';
@@ -17,7 +17,7 @@ function statusLabel(cvStatus, interviewStatus) {
 }
 
 export async function GET(request) {
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return NextResponse.json({ success: false, error: 'Sesi personel diperlukan.' }, { status: 401 });
 
   const parsed = querySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));

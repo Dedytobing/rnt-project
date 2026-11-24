@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getInternalSession } from '@/lib/internal-session';
+import { getVerifiedInternalSession } from '@/lib/internal-session';
 import { createInternalDataClient } from '@/lib/supabase-server';
 import { cleanWhitelistRosterLine } from '@/lib/whitelist-parser';
 import { isSensitiveFeatureAllowed, listSensitiveFeatureAccess, normalizeSensitiveAccessName } from '@/lib/sensitive-feature-access';
@@ -49,7 +49,7 @@ async function recordPersonnelActivity(db, session, event, targetName, actionDet
 }
 
 export async function GET(request) {
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return NextResponse.json({ success: false, error: 'Sesi personel diperlukan.' }, { status: 401 });
   const sessionCanAccessSensitiveFeatures = await isSensitiveFeatureAllowed(session);
   if (session.role !== 'ADMIN' && !sessionCanAccessSensitiveFeatures) return NextResponse.json({ success: false, error: 'Akses Manajemen ditolak.' }, { status: 403 });
@@ -115,7 +115,7 @@ export async function GET(request) {
 export async function POST(request) {
   const origin = request.headers.get('origin');
   if (origin && origin !== new URL(request.url).origin) return NextResponse.json({ success: false, error: 'Asal permintaan tidak valid.' }, { status: 403 });
-  const session = getInternalSession(request);
+  const session = await getVerifiedInternalSession(request);
   if (!session) return NextResponse.json({ success: false, error: 'Sesi personel diperlukan.' }, { status: 401 });
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ success: false, error: 'Format permintaan tidak valid.' }, { status: 400 }); }

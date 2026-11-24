@@ -118,10 +118,9 @@ export default function PinGeneratorPage() {
                   setRole(value); setPin(''); setLoading(value === 'STAFF'); setCopied(false); setError('');
                   if (value === 'STAFF') { setAdminKey(''); setAdminKeyInput(''); setAdminVerified(false); }
                   else {
-                    let remembered = false;
-                    try { remembered = window.sessionStorage.getItem(ADMIN_VERIFIED_SESSION_KEY) === '1'; } catch { /* Ask for the key if storage is unavailable. */ }
-                    setAdminVerified(remembered);
-                    setLoading(remembered);
+                    // Let the server validate its HttpOnly 14-day cookie before asking for the key again.
+                    setAdminVerified(true);
+                    setLoading(true);
                   }
                 }}
                 className={`rounded-md px-4 py-2.5 text-sm font-bold transition ${role === value ? 'bg-[#254532] text-white shadow-sm' : 'text-slate-600 hover:text-[#254532]'}`}>
